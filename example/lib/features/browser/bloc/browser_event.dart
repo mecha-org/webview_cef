@@ -42,3 +42,22 @@ class BrowserTitleChanged extends BrowserEvent {
   @override
   List<Object?> get props => [title];
 }
+
+class BrowserHistoryClearRequested extends BrowserEvent {}
+
+class BrowserSearchQueryChanged extends BrowserEvent {
+  final String query;
+  const BrowserSearchQueryChanged(this.query);
+
+  @override
+  List<Object?> get props => [query];
+}
+
+class BrowserHistoryItemDeleted extends BrowserEvent {
+  final BrowserHistory item;
+  final String currentQuery;
+  const BrowserHistoryItemDeleted(this.item, this.currentQuery);
+
+  @override
+  List<Object?> get props => [item, currentQuery];
+}

@@ -4,13 +4,17 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef/webview_cef.dart';
+
 import '../../../core/utils/constants.dart';
+import '../data/models/browser_history.dart';
+import '../data/repositories/history_repository.dart';
 
 part 'browser_event.dart';
 part 'browser_state.dart';
 
 class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
   late final WebViewController _controller;
+  HistoryRepository? _historyRepository;
 
   WebViewController get controller => _controller;
 
@@ -36,6 +40,9 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
     on<BrowserGoHomeRequested>(_onGoHome);
     on<BrowserUrlChanged>(_onUrlChanged);
     on<BrowserTitleChanged>(_onTitleChanged);
+    on<BrowserHistoryClearRequested>(_onHistoryClearRequested);
+    on<BrowserSearchQueryChanged>(_onSearchQueryChanged);
+    on<BrowserHistoryItemDeleted>(_onHistoryItemDeleted);
   }
 
   Future<void> _onInitialized(
@@ -43,7 +50,10 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
     Emitter<BrowserState> emit,
   ) async {
     try {
-      await WebviewManager().initialize(userAgent: AppConstants.defaultUserAgent);
+      _historyRepository = await HistoryRepository.create();
+
+      await WebviewManager()
+          .initialize(userAgent: AppConstants.defaultUserAgent);
 
       final listener = WebviewEventsListener(
         onTitleChanged: (t) {
@@ -96,7 +106,9 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
     String finalUrl = event.url.trim();
     if (finalUrl.isEmpty) return;
 
-    if (!finalUrl.startsWith(RegExp(r'[a-zA-Z]+://'))) {
+    final isUri = Uri.tryParse(event.url.trim())?.isAbsolute;
+
+    if (!isUri!) {
       if (finalUrl.contains('.') && !finalUrl.contains(' ')) {
         finalUrl = '${AppConstants.defaultScheme}$finalUrl';
       } else {
@@ -105,7 +117,8 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
       }
     }
 
-    emit(state.copyWith(isHomePage: false, currentUrl: finalUrl));
+    emit(state
+        .copyWith(isHomePage: false, currentUrl: finalUrl, searchResults: []));
     if (_controller.value) {
       await _controller.loadUrl(finalUrl);
     }
@@ -149,6 +162,13 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
 
   void _onUrlChanged(BrowserUrlChanged event, Emitter<BrowserState> emit) {
     if (event.url != AppConstants.homepageUrl && event.url.isNotEmpty) {
+      // if (_historyRepository != null) {
+      //   _historyRepository!.saveHistory(BrowserHistory(
+      //     url: event.url,
+      //     title: state.title.isNotEmpty ? state.title : event.url,
+      //     timestamp: DateTime.now().millisecondsSinceEpoch,
+      //   ));
+      // }
       emit(state.copyWith(
         isHomePage: false,
         currentUrl: event.url,
@@ -158,12 +178,66 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
 
   void _onTitleChanged(BrowserTitleChanged event, Emitter<BrowserState> emit) {
     emit(state.copyWith(title: event.title));
+
+    // if (_historyRepository != null && state.currentUrl.isNotEmpty) {
+    //   final currentHistory = _historyRepository!.getHistory();
+    //   if (currentHistory.isNotEmpty) {
+    //     final latest = currentHistory.first;
+    //     if (latest.url == state.currentUrl && latest.title != event.title) {
+    //       latest.title = event.title;
+    //       _historyRepository!.saveHistory(latest);
+    //     }
+    //   }
+    // }
+  }
+
+  Future<void> _onHistoryClearRequested(
+    BrowserHistoryClearRequested event,
+    Emitter<BrowserState> emit,
+  ) async {
+    if (_historyRepository != null) {
+      _historyRepository!.clearHistory();
+    }
+  }
+
+  void _onSearchQueryChanged(
+    BrowserSearchQueryChanged event,
+    Emitter<BrowserState> emit,
+  ) {
+    if (_historyRepository == null) return;
+
+    if (event.query.trim().isEmpty) {
+      final allHistory = _historyRepository!.getHistory();
+      emit(state.copyWith(searchResults: allHistory));
+      return;
+    }
+
+    final results = _historyRepository!.searchHistory(event.query);
+    emit(state.copyWith(searchResults: results));
+  }
+
+  void _onHistoryItemDeleted(
+    BrowserHistoryItemDeleted event,
+    Emitter<BrowserState> emit,
+  ) {
+    if (_historyRepository != null) {
+      _historyRepository!.historyBox.remove(event.item.id);
+
+      if (event.currentQuery.trim().isEmpty) {
+        final allHistory = _historyRepository!.getHistory();
+        emit(state.copyWith(searchResults: allHistory));
+      } else {
+        final results = _historyRepository!.searchHistory(event.currentQuery);
+        emit(state.copyWith(searchResults: results));
+      }
+    }
   }
 
   @override
   Future<void> close() async {
     _controller.dispose();
     await WebviewManager().quit();
+    _historyRepository?.close();
     return super.close();
   }
 }
