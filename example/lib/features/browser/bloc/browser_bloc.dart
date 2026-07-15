@@ -161,19 +161,11 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
   }
 
   void _onUrlChanged(BrowserUrlChanged event, Emitter<BrowserState> emit) {
-    if (event.url != AppConstants.homepageUrl && event.url.isNotEmpty) {
-      // if (_historyRepository != null) {
-      //   _historyRepository!.saveHistory(BrowserHistory(
-      //     url: event.url,
-      //     title: state.title.isNotEmpty ? state.title : event.url,
-      //     timestamp: DateTime.now().millisecondsSinceEpoch,
-      //   ));
-      // }
-      emit(state.copyWith(
-        isHomePage: false,
-        currentUrl: event.url,
-      ));
-    }
+    final isHome = event.url == AppConstants.homepageUrl || event.url.isEmpty;
+    emit(state.copyWith(
+      isHomePage: isHome,
+      currentUrl: isHome ? '' : event.url,
+    ));
   }
 
   void _onTitleChanged(BrowserTitleChanged event, Emitter<BrowserState> emit) {
@@ -213,7 +205,17 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
     }
 
     final results = _historyRepository!.searchHistory(event.query);
-    emit(state.copyWith(searchResults: results));
+
+    final seenUrls = <String>{};
+    final uniqueResults = <BrowserHistory>[];
+    for (final item in results) {
+      final normalizedUrl = item.url.trim().toLowerCase();
+      if (normalizedUrl.isNotEmpty && seenUrls.add(normalizedUrl)) {
+        uniqueResults.add(item);
+      }
+    }
+
+    emit(state.copyWith(searchResults: uniqueResults));
   }
 
   void _onHistoryItemDeleted(
@@ -228,7 +230,17 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
         emit(state.copyWith(searchResults: allHistory));
       } else {
         final results = _historyRepository!.searchHistory(event.currentQuery);
-        emit(state.copyWith(searchResults: results));
+
+        final seenUrls = <String>{};
+        final uniqueResults = <BrowserHistory>[];
+        for (final item in results) {
+          final normalizedUrl = item.url.trim().toLowerCase();
+          if (normalizedUrl.isNotEmpty && seenUrls.add(normalizedUrl)) {
+            uniqueResults.add(item);
+          }
+        }
+
+        emit(state.copyWith(searchResults: uniqueResults));
       }
     }
   }

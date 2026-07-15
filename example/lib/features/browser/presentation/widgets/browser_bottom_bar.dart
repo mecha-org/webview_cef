@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
@@ -18,6 +20,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
   final _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
   OverlayEntry? _menuOverlayEntry;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -137,6 +140,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _hideOverlay();
     _hideMenu();
     _focusNode.removeListener(_onFocusChange);
@@ -216,7 +220,10 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                         ),
                       ),
                       onChanged: (value) {
-                        bloc.add(BrowserSearchQueryChanged(value));
+                        _debounceTimer?.cancel();
+                        _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+                          bloc.add(BrowserSearchQueryChanged(value));
+                        });
                       },
                       onSubmitted: (url) {
                         if (state.isInitialized) {

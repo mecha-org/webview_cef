@@ -75,11 +75,12 @@ class HistoryRepository {
   List<BrowserHistory> searchHistory(String queryText) {
     try {
       if (queryText.trim().isEmpty) return [];
-      final query = historyBox
+      final query = (historyBox
           .query(BrowserHistory_.title
               .contains(queryText, caseSensitive: false)
               .or(BrowserHistory_.url
                   .contains(queryText, caseSensitive: false)))
+            ..order(BrowserHistory_.timestamp, flags: Order.descending))
           .build();
       final results = query.find();
       query.close();
