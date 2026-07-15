@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
-import 'package:webview_cef_example/features/browser/presentation/widgets/browser_menu_sheet.dart';
+import 'package:webview_cef_example/features/browser/presentation/widgets/bottom_icon_button.dart';
+import 'package:webview_cef_example/features/browser/presentation/widgets/browser_menu_popup.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_suggestions_panel.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_count_button.dart';
 
@@ -16,6 +17,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
+  OverlayEntry? _menuOverlayEntry;
 
   @override
   void initState() {
@@ -84,9 +86,59 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
     }
   }
 
+  void _showMenu() {
+    if (_menuOverlayEntry != null) return;
+
+    final bloc = context.read<BrowserBloc>();
+
+    _menuOverlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // Full screen dismissible barrier
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _hideMenu,
+              child: Container(
+                color: Colors.black26, // Subtle dimming overlay
+              ),
+            ),
+            // Floating menu popover positioned above the bottom bar
+            Positioned(
+              right: 16,
+              bottom: 76, // Float exactly above the bottom bar
+              width: 320, // Width matches the screenshot popover
+              child: Material(
+                color: Colors.transparent,
+                child: BrowserMenuPopupContent(
+                  bloc: bloc,
+                  onDismiss: _hideMenu,
+                  onFindInPage: () {
+                    _hideMenu();
+                    _focusNode.requestFocus();
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_menuOverlayEntry!);
+  }
+
+  void _hideMenu() {
+    if (_menuOverlayEntry != null) {
+      _menuOverlayEntry!.remove();
+      _menuOverlayEntry = null;
+    }
+  }
+
   @override
   void dispose() {
     _hideOverlay();
+    _hideMenu();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _textController.dispose();
@@ -104,6 +156,8 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
         _textController.text = state.currentUrl;
       },
       child: BlocBuilder<BrowserBloc, BrowserState>(
+        buildWhen: (previous, current) =>
+            previous.isInitialized != current.isInitialized,
         builder: (context, state) {
           return TapRegion(
             groupId: 'browser_search',
@@ -204,7 +258,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                     onTap: () {
                       _hideOverlay();
                       _focusNode.unfocus();
-                      showBrowserMenuSheet(context);
+                      _showMenu();
                     },
                   ),
                 ],
@@ -212,29 +266,6 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class BottomIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const BottomIconButton({
-    super.key,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, color: Colors.white, size: 24),
       ),
     );
   }

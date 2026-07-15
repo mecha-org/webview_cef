@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:show_fps/show_fps.dart';
 
+import 'core/routes/app_routes.dart';
 import 'core/utils/app_theme.dart';
 import 'features/browser/bloc/browser_bloc.dart';
-import 'features/browser/presentation/screen/browser_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -31,7 +31,8 @@ class MyApp extends StatelessWidget {
         darkTheme: AppTheme.dark,
         theme: AppTheme.light,
         debugShowCheckedModeBanner: false,
-        home: const BrowserScreen(),
+        initialRoute: AppRoutes.home,
+        onGenerateRoute: AppRoutes.onGenerateRoute,
         builder: showFps
             ? (context, child) {
                 return ShowFPS(
