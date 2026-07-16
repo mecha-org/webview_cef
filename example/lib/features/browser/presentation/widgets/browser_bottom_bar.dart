@@ -30,6 +30,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
 
   void _onFocusChange() {
     if (!mounted) return;
+    setState(() {});
     if (_focusNode.hasFocus) {
       _showOverlay();
       context
@@ -155,9 +156,16 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
 
     return BlocListener<BrowserBloc, BrowserState>(
       listenWhen: (previous, current) =>
-          previous.currentUrl != current.currentUrl,
+          previous.currentUrl != current.currentUrl ||
+          previous.title != current.title ||
+          previous.isHomePage != current.isHomePage,
       listener: (context, state) {
-        _textController.text = state.currentUrl;
+        if (state.isHomePage) {
+          _textController.text = '';
+        } else {
+          _textController.text =
+              state.title.isNotEmpty ? state.title : state.currentUrl;
+        }
       },
       child: BlocBuilder<BrowserBloc, BrowserState>(
         buildWhen: (previous, current) =>
@@ -221,7 +229,8 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                       ),
                       onChanged: (value) {
                         _debounceTimer?.cancel();
-                        _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+                        _debounceTimer =
+                            Timer(const Duration(milliseconds: 200), () {
                           bloc.add(BrowserSearchQueryChanged(value));
                         });
                       },
@@ -235,39 +244,41 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  BottomIconButton(
-                    icon: Icons.add,
-                    onTap: () {
-                      if (state.isInitialized) {
-                        bloc.add(BrowserGoHomeRequested());
-                        bloc.add(const BrowserSearchQueryChanged(''));
+                  if (!_focusNode.hasFocus) ...[
+                    const SizedBox(width: 16),
+                    BottomIconButton(
+                      icon: Icons.add,
+                      onTap: () {
+                        if (state.isInitialized) {
+                          bloc.add(BrowserGoHomeRequested());
+                          bloc.add(const BrowserSearchQueryChanged(''));
+                          _hideOverlay();
+                          _focusNode.unfocus();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    TabCountButton(
+                      count: 11,
+                      onTap: () {
+                        if (state.isInitialized) {
+                          bloc.add(BrowserGoHomeRequested());
+                          bloc.add(const BrowserSearchQueryChanged(''));
+                          _hideOverlay();
+                          _focusNode.unfocus();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    BottomIconButton(
+                      icon: Icons.menu,
+                      onTap: () {
                         _hideOverlay();
                         _focusNode.unfocus();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  TabCountButton(
-                    count: 11,
-                    onTap: () {
-                      if (state.isInitialized) {
-                        bloc.add(BrowserGoHomeRequested());
-                        bloc.add(const BrowserSearchQueryChanged(''));
-                        _hideOverlay();
-                        _focusNode.unfocus();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  BottomIconButton(
-                    icon: Icons.menu,
-                    onTap: () {
-                      _hideOverlay();
-                      _focusNode.unfocus();
-                      _showMenu();
-                    },
-                  ),
+                        _showMenu();
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
