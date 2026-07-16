@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_bottom_bar.dart';
-import 'package:webview_cef_example/features/browser/presentation/widgets/home_page_body.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/webview_body.dart';
 
 class BrowserScreen extends StatefulWidget {
@@ -29,9 +28,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
             children: [
               Expanded(
                 child: state.isInitialized
-                    ? (state.isHomePage
-                        ? const BrowserHomePageBody()
-                        : const BrowserWebviewBody())
+                    ? const BrowserWebviewBody()
                     : const Center(
                         child: CircularProgressIndicator(color: Colors.white70),
                       ),

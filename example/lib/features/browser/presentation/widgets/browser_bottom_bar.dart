@@ -7,6 +7,7 @@ import 'package:webview_cef_example/features/browser/presentation/widgets/bottom
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_menu_popup.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_suggestions_panel.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_count_button.dart';
+import 'package:webview_cef_example/features/browser/presentation/widgets/tab_switcher_sheet.dart';
 
 class BrowserBottomBar extends StatefulWidget {
   const BrowserBottomBar({super.key});
@@ -169,7 +170,8 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
       },
       child: BlocBuilder<BrowserBloc, BrowserState>(
         buildWhen: (previous, current) =>
-            previous.isInitialized != current.isInitialized,
+            previous.isInitialized != current.isInitialized ||
+            previous.tabs.length != current.tabs.length,
         builder: (context, state) {
           return TapRegion(
             groupId: 'browser_search',
@@ -250,7 +252,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                       icon: Icons.add,
                       onTap: () {
                         if (state.isInitialized) {
-                          bloc.add(BrowserGoHomeRequested());
+                          bloc.add(const BrowserNewTabRequested());
                           bloc.add(const BrowserSearchQueryChanged(''));
                           _hideOverlay();
                           _focusNode.unfocus();
@@ -259,13 +261,12 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                     ),
                     const SizedBox(width: 16),
                     TabCountButton(
-                      count: 11,
+                      count: state.tabs.length,
                       onTap: () {
                         if (state.isInitialized) {
-                          bloc.add(BrowserGoHomeRequested());
-                          bloc.add(const BrowserSearchQueryChanged(''));
                           _hideOverlay();
                           _focusNode.unfocus();
+                          TabSwitcherSheet.show(context, bloc);
                         }
                       },
                     ),

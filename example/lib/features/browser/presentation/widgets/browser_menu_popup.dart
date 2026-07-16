@@ -78,7 +78,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                         onTap: () {
                           widget.onDismiss();
                           if (state.isInitialized) {
-                            widget.bloc.add(BrowserGoHomeRequested());
+                            widget.bloc.add(const BrowserNewTabRequested());
                           }
                         },
                       ),

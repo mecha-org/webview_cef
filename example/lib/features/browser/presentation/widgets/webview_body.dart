@@ -1,24 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
+import 'package:webview_cef_example/features/browser/presentation/widgets/home_page_body.dart';
 
 class BrowserWebviewBody extends StatelessWidget {
   const BrowserWebviewBody({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<BrowserBloc>().controller;
-    return Row(
-      children: [
-        ValueListenableBuilder(
-          valueListenable: controller,
-          builder: (context, value, child) {
-            return controller.value
-                ? Expanded(child: controller.webviewWidget)
-                : controller.loadingWidget;
-          },
-        ),
-      ],
+    return BlocBuilder<BrowserBloc, BrowserState>(
+      buildWhen: (previous, current) =>
+          previous.tabs != current.tabs ||
+          previous.activeTabIndex != current.activeTabIndex,
+      builder: (context, state) {
+        if (state.tabs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return IndexedStack(
+          index: state.activeTabIndex,
+          children: state.tabs.map((tab) {
+            return Stack(
+              children: [
+                Row(
+                  children: [
+                    ValueListenableBuilder(
+                      valueListenable: tab.controller,
+                      builder: (context, value, child) {
+                        return tab.controller.value
+                            ? Expanded(child: tab.controller.webviewWidget)
+                            : tab.controller.loadingWidget;
+                      },
+                    ),
+                  ],
+                ),
+                if (tab.isHomePage)
+                  const Positioned.fill(
+                    child: Material(
+                      color: Colors.black,
+                      child: BrowserHomePageBody(),
+                    ),
+                  ),
+              ],
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }

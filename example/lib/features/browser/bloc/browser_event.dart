@@ -28,19 +28,49 @@ class BrowserDevToolsRequested extends BrowserEvent {}
 class BrowserGoHomeRequested extends BrowserEvent {}
 
 class BrowserUrlChanged extends BrowserEvent {
+  final String tabId;
   final String url;
-  const BrowserUrlChanged(this.url);
+  const BrowserUrlChanged({required this.tabId, required this.url});
 
   @override
-  List<Object?> get props => [url];
+  List<Object?> get props => [tabId, url];
 }
 
 class BrowserTitleChanged extends BrowserEvent {
+  final String tabId;
   final String title;
-  const BrowserTitleChanged(this.title);
+  const BrowserTitleChanged({required this.tabId, required this.title});
 
   @override
-  List<Object?> get props => [title];
+  List<Object?> get props => [tabId, title];
+}
+
+class BrowserNewTabRequested extends BrowserEvent {
+  final String? initialUrl;
+  const BrowserNewTabRequested({this.initialUrl});
+
+  @override
+  List<Object?> get props => [initialUrl];
+}
+
+class BrowserCloseTabRequested extends BrowserEvent {
+  final int index;
+  const BrowserCloseTabRequested(this.index);
+
+  @override
+  List<Object?> get props => [index];
+}
+
+class BrowserSwitchTabRequested extends BrowserEvent {
+  final int index;
+  const BrowserSwitchTabRequested(this.index);
+
+  @override
+  List<Object?> get props => [index];
+}
+
+class BrowserCloseAllTabsRequested extends BrowserEvent {
+  const BrowserCloseAllTabsRequested();
 }
 
 class BrowserHistoryClearRequested extends BrowserEvent {}

@@ -75,8 +75,7 @@ class HistoryRepository {
   List<BrowserHistory> searchHistory(String queryText) {
     try {
       if (queryText.trim().isEmpty) return [];
-      final query = (historyBox
-          .query(BrowserHistory_.title
+      final query = (historyBox.query(BrowserHistory_.title
               .contains(queryText, caseSensitive: false)
               .or(BrowserHistory_.url
                   .contains(queryText, caseSensitive: false)))
