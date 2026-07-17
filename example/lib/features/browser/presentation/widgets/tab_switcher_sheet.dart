@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
+
 import '../../../../core/utils/app_theme.dart';
 
 class TabSwitcherSheet extends StatelessWidget {
@@ -58,7 +59,6 @@ class TabSwitcherSheet extends StatelessWidget {
                     final tab = state.tabs[index];
                     final isActive = index == state.activeTabIndex;
 
-                    // Clean URL/title for display
                     String displayUrl = l10n.newTab;
                     if (tab.currentUrl.isNotEmpty) {
                       try {
@@ -90,7 +90,6 @@ class TabSwitcherSheet extends StatelessWidget {
                         clipBehavior: Clip.antiAlias,
                         child: Stack(
                           children: [
-                            // Card preview placeholder/icon
                             Center(
                               child: Icon(
                                 Icons.public,
@@ -98,13 +97,13 @@ class TabSwitcherSheet extends StatelessWidget {
                                 color: colors.dragHandle,
                               ),
                             ),
-                            // Title & Close Button at the bottom
                             Positioned(
                               left: 0,
                               right: 0,
                               bottom: 0,
                               child: Container(
-                                color: colors.popupBarrierColor.withValues(alpha: 0.45),
+                                color: colors.popupBarrierColor
+                                    .withValues(alpha: 0.45),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
                                 child: Row(
@@ -112,7 +111,8 @@ class TabSwitcherSheet extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         title,
-                                        style: theme.textTheme.bodySmall?.copyWith(
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
                                           color: colors.searchBarText,
                                           fontWeight: FontWeight.w500,
                                         ),

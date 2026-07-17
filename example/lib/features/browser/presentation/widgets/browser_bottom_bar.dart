@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/bottom_icon_button.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_menu_popup.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_suggestions_panel.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_count_button.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_switcher_sheet.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
+
 import '../../../../core/utils/app_theme.dart';
 
 class BrowserBottomBar extends StatefulWidget {
@@ -52,7 +53,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
         return Positioned(
           left: 0,
           right: 0,
-          bottom: 72, // Float above the 72px bottom bar
+          bottom: 72,
           child: Material(
             color: Colors.transparent,
             child: TapRegion(
@@ -103,19 +104,17 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
         final colors = Theme.of(context).extension<AppColorsExtension>()!;
         return Stack(
           children: [
-            // Full screen dismissible barrier
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _hideMenu,
               child: Container(
-                color: colors.popupBarrierColor, // Subtle dimming overlay
+                color: colors.popupBarrierColor,
               ),
             ),
-            // Floating menu popover positioned above the bottom bar
             Positioned(
               right: 16,
-              bottom: 76, // Float exactly above the bottom bar
-              width: 320, // Width matches the screenshot popover
+              bottom: 76,
+              width: 320,
               child: Material(
                 color: Colors.transparent,
                 child: BrowserMenuPopupContent(

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/core/routes/app_routes.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
+
 import '../../../../core/utils/app_theme.dart';
 
 class BrowserMenuPopupContent extends StatefulWidget {
@@ -30,7 +31,6 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
       isDesktopSite = newValue;
     });
     final l10n = AppLocalizations.of(context)!;
-    // Clear any active snackbars to prevent layout queueing
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

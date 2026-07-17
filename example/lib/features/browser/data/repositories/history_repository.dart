@@ -53,6 +53,7 @@ class HistoryRepository {
   }
 
   void saveHistory(BrowserHistory history) {
+    // TODO: later we need to implement this
     // try {
     //   historyBox.put(history);
     // } catch (e, stackTrace) {
@@ -63,6 +64,7 @@ class HistoryRepository {
   }
 
   void clearHistory() {
+    // TODO: later we need to implement this
     // try {
     //   historyBox.removeAll();
     // } catch (e, stackTrace) {
