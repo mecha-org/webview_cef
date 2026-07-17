@@ -8,6 +8,7 @@ import 'package:webview_cef_example/features/browser/presentation/widgets/browse
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_suggestions_panel.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_count_button.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/tab_switcher_sheet.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class BrowserBottomBar extends StatefulWidget {
   const BrowserBottomBar({super.key});
@@ -98,6 +99,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
 
     _menuOverlayEntry = OverlayEntry(
       builder: (context) {
+        final colors = Theme.of(context).extension<AppColorsExtension>()!;
         return Stack(
           children: [
             // Full screen dismissible barrier
@@ -105,7 +107,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
               behavior: HitTestBehavior.opaque,
               onTap: _hideMenu,
               child: Container(
-                color: Colors.black26, // Subtle dimming overlay
+                color: colors.popupBarrierColor, // Subtle dimming overlay
               ),
             ),
             // Floating menu popover positioned above the bottom bar
@@ -154,6 +156,8 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<BrowserBloc>();
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
 
     return BlocListener<BrowserBloc, BrowserState>(
       listenWhen: (previous, current) =>
@@ -183,7 +187,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                   .add(const BrowserSearchQueryChanged(''));
             },
             child: Container(
-              color: Colors.black,
+              color: theme.scaffoldBackgroundColor,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
@@ -192,14 +196,14 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                       focusNode: _focusNode,
                       controller: _textController,
                       elevation: const WidgetStatePropertyAll(0),
-                      backgroundColor: const WidgetStatePropertyAll(
-                        Color(0xFF1C1C1E),
+                      backgroundColor: WidgetStatePropertyAll(
+                        colors.searchBarBackground,
                       ),
                       shape: WidgetStatePropertyAll(
                         RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
-                          side: const BorderSide(
-                            color: Colors.white10,
+                          side: BorderSide(
+                            color: colors.searchBarBorder,
                             width: 1,
                           ),
                         ),
@@ -211,22 +215,20 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                         minHeight: 48,
                         maxHeight: 48,
                       ),
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.lock_outline,
-                        color: Color(0xFF8E8E93),
+                        color: colors.inactiveGrey,
                         size: 18,
                       ),
                       hintText: "Search or enter address",
-                      hintStyle: const WidgetStatePropertyAll(
-                        TextStyle(
-                          color: Color(0xFF8E8E93),
-                          fontSize: 15,
+                      hintStyle: WidgetStatePropertyAll(
+                        theme.textTheme.bodyLarge?.copyWith(
+                          color: colors.searchBarHint,
                         ),
                       ),
-                      textStyle: const WidgetStatePropertyAll(
-                        TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
+                      textStyle: WidgetStatePropertyAll(
+                        theme.textTheme.bodyLarge?.copyWith(
+                          color: colors.searchBarText,
                         ),
                       ),
                       onChanged: (value) {

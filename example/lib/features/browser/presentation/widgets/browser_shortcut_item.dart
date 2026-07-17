@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class BrowserShortcutItem extends StatelessWidget {
   final String label;
@@ -16,6 +17,9 @@ class BrowserShortcutItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -28,25 +32,24 @@ class BrowserShortcutItem extends StatelessWidget {
               shape: const CircleBorder(),
               padding: EdgeInsets.zero,
               backgroundColor: color,
-              foregroundColor: const Color(0xFF1C1C1E),
+              foregroundColor: colors.searchBarBackground,
               elevation: 0,
             ).copyWith(
               overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
                 if (states.contains(WidgetState.hovered)) {
-                  return Colors.black.withValues(alpha: 0.08);
+                  return colors.popupBarrierColor.withValues(alpha: 0.08);
                 }
                 if (states.contains(WidgetState.pressed)) {
-                  return Colors.black.withValues(alpha: 0.16);
+                  return colors.popupBarrierColor.withValues(alpha: 0.16);
                 }
                 return null;
               }),
             ),
             child: Text(
               letter,
-              style: const TextStyle(
-                fontSize: 20,
+              style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF1C1C1E),
+                color: colors.searchBarBackground,
                 letterSpacing: -0.5,
               ),
             ),
@@ -60,11 +63,7 @@ class BrowserShortcutItem extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white38,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            style: theme.textTheme.labelMedium,
           ),
         ),
       ],

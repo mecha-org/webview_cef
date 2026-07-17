@@ -23,14 +23,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
     return BlocBuilder<BrowserBloc, BrowserState>(
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: Colors.black,
           body: Column(
             children: [
               Expanded(
                 child: state.isInitialized
                     ? const BrowserWebviewBody()
                     : const Center(
-                        child: CircularProgressIndicator(color: Colors.white70),
+                        child: CircularProgressIndicator(),
                       ),
               ),
               const BrowserBottomBar(),

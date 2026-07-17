@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class TabCountButton extends StatelessWidget {
   final int count;
@@ -12,6 +13,9 @@ class TabCountButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
@@ -19,14 +23,14 @@ class TabCountButton extends StatelessWidget {
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.white, width: 2),
+          border: Border.all(color: colors.searchBarText, width: 2),
           borderRadius: BorderRadius.circular(6),
         ),
         alignment: Alignment.center,
         child: Text(
           "$count",
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: colors.searchBarText,
             fontWeight: FontWeight.bold,
             fontSize: 11,
           ),

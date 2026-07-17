@@ -1,27 +1,21 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class BookmarksScreen extends StatelessWidget {
   const BookmarksScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
+
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Bookmarks",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text("Bookmarks"),
       ),
       body: Center(
         child: Column(
@@ -30,32 +24,25 @@ class BookmarksScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
+                color: colors.panelBackground,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white10, width: 1.5),
+                border: Border.all(color: colors.dividerColor, width: 1.5),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.bookmark_border_rounded,
-                color: Colors.white54,
+                color: colors.textSecondary,
                 size: 48,
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               "Bookmarks is Coming Soon",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "We're working hard to bring this feature to you.",
-              style: TextStyle(
-                color: Colors.white30,
-                fontSize: 13,
-              ),
+              style: theme.textTheme.bodySmall,
             ),
           ],
         ),

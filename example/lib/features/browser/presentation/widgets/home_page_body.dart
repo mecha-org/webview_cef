@@ -23,14 +23,9 @@ class BrowserHomePageBody extends StatelessWidget {
                 height: 42,
               ),
               const SizedBox(width: 14),
-              const Text(
+              Text(
                 "Comet Browser",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
+                style: Theme.of(context).textTheme.headlineLarge,
               ),
             ],
           ),

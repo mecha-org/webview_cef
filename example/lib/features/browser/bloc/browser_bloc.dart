@@ -51,7 +51,7 @@ class BrowserBloc extends Bloc<BrowserEvent, BrowserState> {
 
     final controller = WebviewManager().createWebView(
         loading: const Center(
-          child: CircularProgressIndicator(color: Colors.white70),
+          child: CircularProgressIndicator(),
         ),
         injectUserScripts: injectUserScripts);
 

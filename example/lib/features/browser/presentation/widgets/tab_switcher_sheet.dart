@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class TabSwitcherSheet extends StatelessWidget {
   final BrowserBloc bloc;
@@ -11,10 +12,6 @@ class TabSwitcherSheet extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF151515),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (context) {
         return BlocProvider.value(
           value: bloc,
@@ -26,6 +23,9 @@ class TabSwitcherSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: BlocBuilder<BrowserBloc, BrowserState>(
@@ -37,7 +37,7 @@ class TabSwitcherSheet extends StatelessWidget {
                 width: 36,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colors.dragHandle,
                   borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
@@ -76,11 +76,11 @@ class TabSwitcherSheet extends StatelessWidget {
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2C2C2E),
+                          color: colors.popupBottomButtonBackground,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isActive
-                                ? Colors.blueAccent
+                                ? colors.accentActive
                                 : Colors.transparent,
                             width: 2,
                           ),
@@ -89,11 +89,11 @@ class TabSwitcherSheet extends StatelessWidget {
                         child: Stack(
                           children: [
                             // Card preview placeholder/icon
-                            const Center(
+                            Center(
                               child: Icon(
                                 Icons.public,
                                 size: 48,
-                                color: Colors.white24,
+                                color: colors.dragHandle,
                               ),
                             ),
                             // Title & Close Button at the bottom
@@ -102,7 +102,7 @@ class TabSwitcherSheet extends StatelessWidget {
                               right: 0,
                               bottom: 0,
                               child: Container(
-                                color: Colors.black45,
+                                color: colors.popupBarrierColor.withValues(alpha: 0.45),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
                                 child: Row(
@@ -110,9 +110,8 @@ class TabSwitcherSheet extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         title,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: colors.searchBarText,
                                           fontWeight: FontWeight.w500,
                                         ),
                                         maxLines: 1,
@@ -127,14 +126,14 @@ class TabSwitcherSheet extends StatelessWidget {
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.white12,
+                                        decoration: BoxDecoration(
+                                          color: colors.closeButtonBackground,
                                           shape: BoxShape.circle,
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.close,
                                           size: 14,
-                                          color: Colors.white,
+                                          color: colors.searchBarText,
                                         ),
                                       ),
                                     ),
@@ -159,18 +158,17 @@ class TabSwitcherSheet extends StatelessWidget {
                       Navigator.pop(context);
                     },
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: const Color(0xFF2C2C2E),
+                      foregroundColor: colors.searchBarText,
+                      backgroundColor: colors.popupBottomButtonBackground,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       "Close all",
-                      style: TextStyle(
-                        fontSize: 14,
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),

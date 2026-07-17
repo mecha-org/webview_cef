@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/app_theme.dart';
 
 class BottomIconButton extends StatelessWidget {
   final IconData icon;
@@ -12,14 +13,17 @@ class BottomIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<AppColorsExtension>()!;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      splashColor: Colors.white.withValues(alpha: 0.12),
-      hoverColor: Colors.white.withValues(alpha: 0.24),
+      splashColor: colors.closeButtonBackground,
+      hoverColor: colors.shortcutHoverBackground,
       child: Container(
         padding: const EdgeInsets.all(6),
-        child: Icon(icon, color: Colors.white, size: 24),
+        child: Icon(icon, color: colors.searchBarText, size: 24),
       ),
     );
   }
