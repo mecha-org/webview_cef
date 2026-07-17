@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/features/browser/presentation/screen/browser_screen.dart';
 import 'package:webview_cef_example/features/browser/presentation/screen/history_screen.dart';
 import 'package:webview_cef_example/features/browser/presentation/screen/bookmarks_screen.dart';
@@ -26,9 +27,11 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const SettingsScreen());
       default:
         return MaterialPageRoute(
-          builder: (_) => Scaffold(
+          builder: (context) => Scaffold(
             body: Center(
-              child: Text('No route defined for ${routeSettings.name}'),
+              child: Text(
+                AppLocalizations.of(context)!.noRouteDefined(routeSettings.name ?? ''),
+              ),
             ),
           ),
         );

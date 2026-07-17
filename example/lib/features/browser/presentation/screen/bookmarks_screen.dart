@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import '../../../../core/utils/app_theme.dart';
 
 class BookmarksScreen extends StatelessWidget {
@@ -8,6 +9,7 @@ class BookmarksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorsExtension>()!;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -15,7 +17,7 @@ class BookmarksScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("Bookmarks"),
+        title: Text(l10n.bookmarks),
       ),
       body: Center(
         child: Column(
@@ -36,12 +38,12 @@ class BookmarksScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              "Bookmarks is Coming Soon",
+              l10n.comingSoon(l10n.bookmarks),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              "We're working hard to bring this feature to you.",
+              l10n.workingHard,
               style: theme.textTheme.bodySmall,
             ),
           ],

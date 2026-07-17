@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/core/routes/app_routes.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
 import '../../../../core/utils/app_theme.dart';
@@ -28,12 +29,13 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
     setState(() {
       isDesktopSite = newValue;
     });
+    final l10n = AppLocalizations.of(context)!;
     // Clear any active snackbars to prevent layout queueing
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isDesktopSite ? "Desktop site enabled" : "Desktop site disabled",
+          isDesktopSite ? l10n.desktopSiteEnabled : l10n.desktopSiteDisabled,
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -44,6 +46,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorsExtension>()!;
+    final l10n = AppLocalizations.of(context)!;
 
     return BlocBuilder<BrowserBloc, BrowserState>(
       bloc: widget.bloc,
@@ -77,7 +80,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                     children: [
                       _MenuPopupListTile(
                         icon: Icons.add,
-                        label: "New tab",
+                        label: l10n.newTab,
                         onTap: () {
                           widget.onDismiss();
                           if (state.isInitialized) {
@@ -87,16 +90,16 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.visibility_off_outlined,
-                        label: "New Private Tab",
+                        label: l10n.newPrivateTab,
                         onTap: () {
                           widget.onDismiss();
                           if (state.isInitialized) {
                             widget.bloc.add(BrowserGoHomeRequested());
                             ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Private tab opened"),
-                                duration: Duration(seconds: 2),
+                              SnackBar(
+                                content: Text(l10n.privateTabOpened),
+                                duration: const Duration(seconds: 2),
                               ),
                             );
                           }
@@ -104,7 +107,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.history,
-                        label: "History",
+                        label: l10n.history,
                         onTap: () {
                           widget.onDismiss();
                           Navigator.pushNamed(context, AppRoutes.history);
@@ -112,7 +115,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.bookmark_border_rounded,
-                        label: "Bookmarks",
+                        label: l10n.bookmarks,
                         onTap: () {
                           widget.onDismiss();
                           Navigator.pushNamed(context, AppRoutes.bookmarks);
@@ -120,7 +123,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.download_outlined,
-                        label: "Downloads",
+                        label: l10n.downloads,
                         onTap: () {
                           widget.onDismiss();
                           Navigator.pushNamed(context, AppRoutes.downloads);
@@ -136,21 +139,21 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.share_outlined,
-                        label: "Share",
+                        label: l10n.share,
                         onTap: () {
                           widget.onDismiss();
                           ScaffoldMessenger.of(context).clearSnackBars();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Sharing page..."),
-                              duration: Duration(seconds: 2),
+                            SnackBar(
+                              content: Text(l10n.sharingPage),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         },
                       ),
                       _MenuPopupListTile(
                         icon: Icons.computer_outlined,
-                        label: "Desktop site",
+                        label: l10n.desktopSite,
                         trailing: Checkbox(
                           value: isDesktopSite,
                           activeColor: colors.accentActive,
@@ -165,7 +168,7 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                       ),
                       _MenuPopupListTile(
                         icon: Icons.settings_outlined,
-                        label: "Settings",
+                        label: l10n.settings,
                         onTap: () {
                           widget.onDismiss();
                           Navigator.pushNamed(context, AppRoutes.settings);
@@ -227,9 +230,9 @@ class _BrowserMenuPopupContentState extends State<BrowserMenuPopupContent> {
                         widget.onDismiss();
                         ScaffoldMessenger.of(context).clearSnackBars();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Page bookmarked"),
-                            duration: Duration(seconds: 2),
+                          SnackBar(
+                            content: Text(l10n.pageBookmarked),
+                            duration: const Duration(seconds: 2),
                           ),
                         );
                       },

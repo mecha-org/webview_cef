@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/bottom_icon_button.dart';
 import 'package:webview_cef_example/features/browser/presentation/widgets/browser_menu_popup.dart';
@@ -158,6 +159,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
     final bloc = context.read<BrowserBloc>();
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorsExtension>()!;
+    final l10n = AppLocalizations.of(context)!;
 
     return BlocListener<BrowserBloc, BrowserState>(
       listenWhen: (previous, current) =>
@@ -220,7 +222,7 @@ class _BrowserBottomBarState extends State<BrowserBottomBar> {
                         color: colors.inactiveGrey,
                         size: 18,
                       ),
-                      hintText: "Search or enter address",
+                      hintText: l10n.searchOrEnterAddress,
                       hintStyle: WidgetStatePropertyAll(
                         theme.textTheme.bodyLarge?.copyWith(
                           color: colors.searchBarHint,

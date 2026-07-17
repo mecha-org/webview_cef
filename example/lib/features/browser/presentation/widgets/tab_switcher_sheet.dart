@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:webview_cef_example/features/browser/bloc/browser_bloc.dart';
 import '../../../../core/utils/app_theme.dart';
 
@@ -25,6 +26,7 @@ class TabSwitcherSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorsExtension>()!;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -57,7 +59,7 @@ class TabSwitcherSheet extends StatelessWidget {
                     final isActive = index == state.activeTabIndex;
 
                     // Clean URL/title for display
-                    String displayUrl = 'New tab';
+                    String displayUrl = l10n.newTab;
                     if (tab.currentUrl.isNotEmpty) {
                       try {
                         final uri = Uri.parse(tab.currentUrl);
@@ -167,7 +169,7 @@ class TabSwitcherSheet extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      "Close all",
+                      l10n.closeAll,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

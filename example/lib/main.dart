@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:webview_cef_example/l10n/app_localizations.dart';
 import 'package:show_fps/show_fps.dart';
 
 import 'core/routes/app_routes.dart';
@@ -26,7 +27,9 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Mechanix Browser',
+        onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         themeMode: ThemeMode.dark,
         darkTheme: AppTheme.dark,
         theme: AppTheme.light,
