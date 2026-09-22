@@ -16,8 +16,9 @@ namespace webview_cef {
 	CefMainArgs mainArgs;
 	CefRefPtr<WebviewApp> app;
 	CefString userAgent;
+	bool isCefInitialized = false;
 
-    static WebviewPlugin* g_plugin_for_ffi = nullptr;
+	static WebviewPlugin* g_plugin_for_ffi = nullptr;
 #ifdef OS_MAC
 	std::string g_macSubprocessPath;
 	std::string g_macFrameworkDirPath;
