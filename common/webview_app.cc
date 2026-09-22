@@ -124,6 +124,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
         // Platform & Graphics
         command_line->AppendSwitchWithValue("ozone-platform", "wayland");
         command_line->AppendSwitch("disable-vulkan");
+        command_line->AppendSwitchWithValue("use-angle", "gles-egl");
         // command_line->AppendSwitchWithValue("use-gl", "egl");
         command_line->AppendSwitchWithValue("touch-events", "enabled");
         command_line->AppendSwitch("enable-zero-copy");
@@ -131,7 +132,6 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
         // Performance & Optimization
 //         command_line->AppendSwitch("enable-low-end-device-mode");
         command_line->AppendSwitch("enable-gpu-rasterization");
-        command_line->AppendSwitch("enable-oop-rasterization");
         command_line->AppendSwitch("enable-native-gpu-memory-buffers");
         command_line->AppendSwitch("disable-sync");
         command_line->AppendSwitch("disable-translate");
@@ -139,14 +139,13 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 
         // GPU & Video
         command_line->AppendSwitch("disable-gpu-sandbox");
-        command_line->AppendSwitch("ignore-gpu-blacklist");
         command_line->AppendSwitch("ignore-gpu-blocklist");
 
 
 
         // User Agent
         // command_line->AppendSwitchWithValue("user-agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36");
-        command_line->AppendSwitchWithValue("user-agent", "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.6943.142 Mobile Safari/537.36");
+        command_line->AppendSwitchWithValue("user-agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.83 Mobile Safari/537.36");
 
         // Security
         // Note: This switch will stops the captcha and other security checks from working, so we will not use it for now

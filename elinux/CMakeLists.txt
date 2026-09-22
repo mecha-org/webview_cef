@@ -26,6 +26,8 @@ endif()
 set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../third/cef")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
+find_package(PNG REQUIRED)
+find_package(ZLIB REQUIRED)
 
 set(PLUGIN_NAME "webview_cef_plugin")
 
@@ -64,18 +66,6 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
   libcef_dll_wrapper
   ${CEF_LIB_DEPS}
 )
-# Add EGL include path for GPU texture support
-# find_package(PkgConfig)
-# if(PKG_CONFIG_FOUND)
-#   pkg_check_modules(EGL REQUIRED egl)
-#   if(EGL_FOUND)
-#     target_include_directories(${PLUGIN_NAME} PRIVATE ${EGL_INCLUDE_DIRS})
-#     target_link_libraries(${PLUGIN_NAME} PRIVATE ${EGL_LIBRARIES})
-#   endif()
-# endif()
-# The flutter target here refers to the library provided by the elinux toolchain
-# which is automatically configured in the example/elinux build.
-# Note: GTK and X11 dependencies are removed to support DRM/GBM/Wayland.
 
 target_include_directories(${PLUGIN_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 
