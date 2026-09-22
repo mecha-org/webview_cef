@@ -393,7 +393,7 @@ void WebviewHandler::createBrowser(std::string url, bool isPrivate, std::functio
     // OnPaint fallback). If no accelerated frame arrives shortly, the GPU
     // compositor likely can't export a shared texture — warn so a black webview
     // isn't silent.
-    CefPostDelayedTask(TID_UI, base::BindOnce(&WebviewHandler::warnIfNoAcceleratedFrame, this), 15000);
+    CefPostDelayedTask(TID_UI, base::BindOnce(&WebviewHandler::warnIfNoAcceleratedFrame, this), 5000);
 #endif
 }
 
@@ -402,7 +402,7 @@ void WebviewHandler::warnIfNoAcceleratedFrame() {
     if (!received_accelerated_frame_ && !gpu_warning_logged_) {
         gpu_warning_logged_ = true;
         fprintf(stderr,
-                "[webview_cef] WARNING: no GPU accelerated-paint frame after 15s. "
+                "[webview_cef] WARNING: no GPU accelerated-paint frame after 5s. "
                 "This build renders the webview only via the GPU shared-texture "
                 "path; if it appears black, the GPU compositor may be unavailable "
                 "(headless, VM, software GL, or a crashed GPU process).\n");
