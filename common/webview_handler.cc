@@ -915,6 +915,11 @@ void write_to_vector(png_structp png_ptr, png_bytep data, png_size_t length) {
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
                              const CefRenderHandler::RectList &dirtyRects, const void *buffer, int w, int h)
 {
+#ifdef WEBVIEW_CEF_GPU_TEXTURE
+    fprintf(stderr,
+            "[webview_cef] WARNING: no GPU accelerated-paint frame. \n");
+    fflush(stderr);
+#endif
     if (!browser->IsPopup())
     {
         int browserId = browser->GetIdentifier();
@@ -1016,9 +1021,11 @@ void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::Pa
 }
 
 void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
-                            const CefRenderHandler::RectList &dirtyRects, const CefAcceleratedPaintInfo &info) {
+                                        const CefRenderHandler::RectList &dirtyRects, const CefAcceleratedPaintInfo &info)
+{
 #ifdef WEBVIEW_CEF_GPU_TEXTURE
-    if (!browser->IsPopup() && onAcceleratedPaintCallback != nullptr) {
+    if (!browser->IsPopup() && onAcceleratedPaintCallback != nullptr)
+    {
         received_accelerated_frame_ = true;
         int w = 0, h = 0;
         auto it = browser_map_.find(browser->GetIdentifier());
@@ -1040,12 +1047,20 @@ void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRender
         // ID3D11Device1::OpenSharedResource1); on macOS it is an IOSurfaceRef.
         // The platform renderer wraps/copies it before returning.
 #ifdef __APPLE__
-        const void* sharedTexture = reinterpret_cast<const void*>(info.shared_texture_io_surface);
+        const void *sharedTexture = reinterpret_cast<const void *>(info.shared_texture_io_surface);
+#elif defined(OS_LINUX)
+        const void *sharedTexture = nullptr;
 #else
-        const void* sharedTexture = reinterpret_cast<const void*>(info.shared_texture_handle);
+        const void *sharedTexture = reinterpret_cast<const void *>(info.shared_texture_handle);
 #endif
         onAcceleratedPaintCallback(browser->GetIdentifier(), sharedTexture,
                                    w, h, static_cast<int>(info.format));
+#if defined(OS_LINUX)
+        if (onAcceleratedPaintInfoCallback != nullptr)
+        {
+            onAcceleratedPaintInfoCallback(browser->GetIdentifier(), info, w, h);
+        }
+#endif
     }
 #endif
 }
