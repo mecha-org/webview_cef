@@ -367,11 +367,15 @@ void WebviewHandler::createBrowser(std::string url, bool isPrivate, std::functio
     // macOS) instead of the software OnPaint CPU buffer. Requires the GPU to be
     // left enabled (see WebviewApp).
     window_info.shared_texture_enabled = true;
+#if defined(_WIN32) || defined(OS_MAC)
     // Drive frame production ourselves so the rate can follow the display's
     // refresh (>60 Hz) instead of being capped at windowless_frame_rate. The
     // platform layer ticks SendExternalBeginFrame on each vblank — Windows from
     // an IDXGIOutput vblank wait, macOS from a CVDisplayLink.
     window_info.external_begin_frame_enabled = true;
+#else
+    window_info.external_begin_frame_enabled = false;
+#endif
 #endif
 
     // Create the Request Context

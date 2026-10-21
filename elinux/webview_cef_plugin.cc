@@ -21,53 +21,7 @@
 #include "webview_cef_texture.h"
 
 std::unordered_map<int64_t, std::shared_ptr<webview_cef::WebviewPlugin>> webviewPlugins;
-#ifdef WEBVIEW_CEF_GPU_TEXTURE
-static std::atomic<bool> g_frame_timer_running{false};
-static std::unique_ptr<std::thread> g_frame_timer_thread;
-static std::mutex g_frame_timer_mutex;
-static std::condition_variable g_frame_timer_cv;
 
-static void start_begin_frame_timer()
-{
-  if (g_frame_timer_running.exchange(true))
-  {
-    return;
-  }
-  g_frame_timer_thread = std::make_unique<std::thread>([]()
-                                                       {
-    while (g_frame_timer_running.load()) {
-      {
-        std::unique_lock<std::mutex> lock(g_frame_timer_mutex);
-        if (g_frame_timer_cv.wait_for(lock, std::chrono::milliseconds(16),
-                                      [] { return !g_frame_timer_running.load(); })) {
-          break;
-        }
-      }
-      for (const auto& entry : webviewPlugins) {
-        if (entry.second) {
-          entry.second->tickBeginFrame();
-        }
-      }
-    } });
-}
-
-static void stop_begin_frame_timer()
-{
-  if (!g_frame_timer_running.exchange(false))
-  {
-    return;
-  }
-  g_frame_timer_cv.notify_all();
-  if (g_frame_timer_thread && g_frame_timer_thread->joinable())
-  {
-    g_frame_timer_thread->join();
-    g_frame_timer_thread.reset();
-  }
-}
-#else
-static void start_begin_frame_timer() {}
-static void stop_begin_frame_timer() {}
-#endif
 class WebviewTextureRenderer : public webview_cef::WebviewTexture {
  public:
   WebviewTextureRenderer(flutter::TextureRegistrar* registrar)
@@ -261,7 +215,6 @@ class WebviewCefPlugin : public flutter::Plugin {
     webviewPlugins.erase(window_id_);
     plugin_ = nullptr;
     if (webviewPlugins.empty()) {
-      stop_begin_frame_timer();
       webview_cef::stopCEF();
     }
   }
@@ -269,7 +222,6 @@ class WebviewCefPlugin : public flutter::Plugin {
   void SetWindowId(int64_t id) {
     window_id_ = id;
     webviewPlugins.emplace(id, plugin_);
-    start_begin_frame_timer();
   }
 
  private:
