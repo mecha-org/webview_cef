@@ -7,8 +7,14 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/texture_registrar.h>
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstring>
+#include <fcntl.h>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 
 #include <webview_plugin.h>
@@ -30,6 +36,7 @@ class WebviewTextureRenderer : public webview_cef::WebviewTexture {
     registrar_->UnregisterTexture(texture_->textureId);
   }
 
+#ifndef WEBVIEW_CEF_GPU_TEXTURE
   void onFrame(const void* buffer, int32_t width, int32_t height) override {
     std::lock_guard<std::mutex> lock(texture_->mutex);
     if (texture_->width != (uint32_t)width ||
@@ -43,8 +50,50 @@ class WebviewTextureRenderer : public webview_cef::WebviewTexture {
         (void*)texture_->buffer, buffer, width, height);
     registrar_->MarkTextureFrameAvailable(texture_->textureId);
   }
+#else
+  void onAcceleratedFrame(const CefAcceleratedPaintInfo &info,
+                          int32_t width, int32_t height) override
+  {
+    if (info.plane_count != 1 || info.planes[0].fd < 0 || width <= 0 ||
+        height <= 0)
+    {
+      return;
+    }
+    const auto &plane = info.planes[0];
+    const size_t required_size = static_cast<size_t>(plane.stride) * height;
+    if (plane.stride < static_cast<uint32_t>(width * 4) ||
+        plane.size < required_size)
+    {
+      return;
+    }
 
- private:
+    std::lock_guard<std::mutex> lock(texture_->mutex);
+    for (int index = 0; index < texture_->plane_count; ++index)
+    {
+      if (texture_->fds[index] >= 0)
+      {
+        texture_->retired_fds.push_back(texture_->fds[index]);
+        texture_->fds[index] = -1;
+      }
+    }
+    texture_->plane_count = 1;
+    texture_->fds[0] = fcntl(plane.fd, F_DUPFD_CLOEXEC, 0);
+    if (texture_->fds[0] < 0)
+    {
+      texture_->plane_count = 0;
+      return;
+    }
+    texture_->strides[0] = plane.stride;
+    texture_->offsets[0] = plane.offset;
+    texture_->modifier = info.modifier;
+    texture_->format = info.format;
+    texture_->width = width;
+    texture_->height = height;
+    ++texture_->frame_serial;
+    registrar_->MarkTextureFrameAvailable(texture_->textureId);
+  }
+#endif
+private:
   flutter::TextureRegistrar* registrar_;
   std::unique_ptr<WebviewCefTexture> texture_;
 };

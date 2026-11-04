@@ -4,7 +4,8 @@ cmake_policy(SET CMP0074 NEW)
 
 set(PROJECT_NAME "webview_cef")
 project(${PROJECT_NAME} LANGUAGES CXX C)
-set(CMAKE_CXX_STANDARD 17)
+# CEF 149 public headers require C++20.
+set(CMAKE_CXX_STANDARD 20)
 
 # Setup CEF
 include(${CMAKE_CURRENT_SOURCE_DIR}/../third/download.cmake)
@@ -52,20 +53,19 @@ apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
+option(WEBVIEW_CEF_GPU_TEXTURE "Use the eLinux accelerated EGLImage texture path" ON)
+if(WEBVIEW_CEF_GPU_TEXTURE)
+  target_compile_definitions(${PLUGIN_NAME} PRIVATE WEBVIEW_CEF_GPU_TEXTURE)
+endif()
 
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(${PLUGIN_NAME} PRIVATE 
-      flutter
-      flutter_wrapper_plugin
-      libcef_dll_wrapper
-      ${CEF_LIB_DEPS}
-      PNG::PNG
-      ZLIB::ZLIB
+target_link_libraries(${PLUGIN_NAME} PRIVATE
+  flutter
+  flutter_wrapper_plugin
+  libcef_dll_wrapper
+  ${CEF_LIB_DEPS}
 )
-# The flutter target here refers to the library provided by the elinux toolchain
-# which is automatically configured in the example/elinux build.
-# Note: GTK and X11 dependencies are removed to support DRM/GBM/Wayland.
 
 target_include_directories(${PLUGIN_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../common")
 
@@ -77,7 +77,7 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
 SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
 add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
-target_link_libraries(${CEF_TARGET} PUBLIC libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+target_link_libraries(${CEF_TARGET} PUBLIC libcef_lib libcef_dll_wrapper "EGL" "GLESv2" ${CEF_STANDARD_LIBS})
 
 set_target_properties(${CEF_TARGET} PROPERTIES INSTALL_RPATH "$ORIGIN")
 set_target_properties(${CEF_TARGET} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
