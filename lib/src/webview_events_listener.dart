@@ -1,4 +1,5 @@
 import 'package:webview_cef/src/webview.dart';
+import 'package:webview_cef/src/webview_permission.dart';
 
 typedef TitleChangeCb = void Function(String title);
 typedef UrlChangeCb = void Function(String url);
@@ -50,6 +51,21 @@ typedef OnDownloadUpdatedCb = void Function(
   int interruptReason,
 );
 
+/// A page asked for a permission. Answer with
+/// [WebviewManager.respondToPermissionRequest]; until then the page waits.
+typedef OnPermissionRequestCb = void Function(
+  WebViewController controller,
+  WebviewPermissionRequest request,
+);
+
+/// A request reported by [OnPermissionRequestCb] went away unanswered
+/// (navigation, browser closed). Hide any UI for it; responding is a no-op.
+typedef OnPermissionDismissedCb = void Function(
+  WebViewController controller,
+  int requestId,
+  bool isMedia,
+);
+
 class WebviewEventsListener {
   TitleChangeCb? onTitleChanged;
   UrlChangeCb? onUrlChanged;
@@ -59,6 +75,8 @@ class WebviewEventsListener {
   OnLoadErrorCb? onLoadError;
   OnBeforeDownloadCb? onBeforeDownload;
   OnDownloadUpdatedCb? onDownloadUpdated;
+  OnPermissionRequestCb? onPermissionRequest;
+  OnPermissionDismissedCb? onPermissionDismissed;
 
   WebviewEventsListener({
     this.onTitleChanged,
@@ -69,5 +87,7 @@ class WebviewEventsListener {
     this.onLoadError,
     this.onBeforeDownload,
     this.onDownloadUpdated,
+    this.onPermissionRequest,
+    this.onPermissionDismissed,
   });
 }

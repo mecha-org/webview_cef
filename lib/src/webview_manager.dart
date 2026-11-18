@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:webview_cef/src/webview_inject_user_script.dart';
 
 import 'webview.dart';
+import 'webview_permission.dart';
 
 import 'dart:ffi';
 
@@ -280,8 +281,55 @@ class WebviewManager extends ValueNotifier<bool> {
           );
         }
         return;
+      case 'onPermissionRequest':
+        int browserId = call.arguments['browserId'] as int;
+        final request = WebviewPermissionRequest(
+          requestId: call.arguments['requestId'] as int,
+          isMedia: call.arguments['isMedia'] as bool,
+          origin: call.arguments['origin'] as String? ?? '',
+          permissions: call.arguments['permissions'] as int,
+        );
+        WebViewController? controller = _webViews[browserId];
+        final cb = controller?.listener?.onPermissionRequest;
+        if (controller == null || cb == null) {
+          // Nobody to ask: deny so the page is not left waiting.
+          await respondToPermissionRequest(request, false);
+          return;
+        }
+        cb(controller, request);
+        return;
+      case 'onPermissionDismissed':
+        int browserId = call.arguments['browserId'] as int;
+        WebViewController? controller = _webViews[browserId];
+        if (controller != null) {
+          controller.listener?.onPermissionDismissed?.call(
+            controller,
+            call.arguments['requestId'] as int,
+            call.arguments['isMedia'] as bool,
+          );
+        }
+        return;
       default:
     }
+  }
+
+  /// Answers a [WebviewPermissionRequest]. [allow] grants everything that was
+  /// requested; CEF does not support granting a subset. For prompt requests,
+  /// pass [promptResult] to send `dismiss`/`ignore` instead of accept/deny.
+  Future<void> respondToPermissionRequest(
+    WebviewPermissionRequest request,
+    bool allow, {
+    PermissionPromptResult? promptResult,
+  }) async {
+    assert(value);
+    if (request.isMedia) {
+      return pluginChannel.invokeMethod('respondMediaAccess',
+          [request.requestId, allow ? request.permissions : 0]);
+    }
+    final result = promptResult ??
+        (allow ? PermissionPromptResult.accept : PermissionPromptResult.deny);
+    return pluginChannel.invokeMethod(
+        'respondPermissionPrompt', [request.requestId, result.index]);
   }
 
   Future<void> continueDownload(int downloadId, String downloadPath,

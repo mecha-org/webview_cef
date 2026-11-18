@@ -7,6 +7,7 @@
 
 #include "include/cef_client.h"
 #include "include/cef_download_handler.h"
+#include "include/cef_permission_handler.h"
 
 #include <functional>
 #include <list>
@@ -50,7 +51,8 @@ public CefLifeSpanHandler,
 public CefFocusHandler,
 public CefLoadHandler,
 public CefRenderHandler,
-public CefDownloadHandler{
+public CefDownloadHandler,
+public CefPermissionHandler{
 public:
     //Paint callback (software off-screen rendering)
     std::function<void(int browserId, const void* buffer, int32_t width, int32_t height)> onPaintCallback;
@@ -77,6 +79,15 @@ public:
     //download message
     std::function<void(int browserId, uint32_t downloadId, std::string url, std::string suggestedName, std::string contentDisposition, std::string mimeType, int64_t totalBytes)> onBeforeDownloadEvent;
     std::function<void(int browserId, uint32_t downloadId, std::string url, std::string fullPath, int64_t receivedBytes, int64_t totalBytes, int64_t currentSpeed, int percentComplete, bool isInProgress, bool isComplete, bool isCanceled, bool isInterrupted, int interruptReason)> onDownloadUpdatedEvent;
+    //permission message
+    // |isMedia| true: |permissions| is a cef_media_access_permission_types_t
+    // mask (getUserMedia / getDisplayMedia), answered with respondMediaAccess.
+    // |isMedia| false: |permissions| is a cef_permission_request_types_t mask
+    // (geolocation, notifications, clipboard, ...), answered with
+    // respondPermissionPrompt.
+    std::function<void(int browserId, uint64_t requestId, bool isMedia, std::string origin, uint32_t permissions)> onPermissionRequestEvent;
+    // A pending request went away without an answer (navigation, tab closed).
+    std::function<void(int browserId, uint64_t requestId, bool isMedia)> onPermissionDismissedEvent;
     
     explicit WebviewHandler();
     ~WebviewHandler();
@@ -94,6 +105,7 @@ public:
     virtual CefRefPtr<CefLoadHandler> GetLoadHandler() override { return static_cast<CefLoadHandler*>(this); }
     virtual CefRefPtr<CefRenderHandler> GetRenderHandler() override { return static_cast<CefRenderHandler*>(this); }
     virtual CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return static_cast<CefDownloadHandler*>(this); }
+    virtual CefRefPtr<CefPermissionHandler> GetPermissionHandler() override { return static_cast<CefPermissionHandler*>(this); }
 
 	bool OnProcessMessageReceived(
         CefRefPtr<CefBrowser> browser,
@@ -175,6 +187,27 @@ public:
                                  CefRefPtr<CefDownloadItem> download_item,
                                  CefRefPtr<CefDownloadItemCallback> callback) override;
 
+    // CefPermissionHandler methods:
+    virtual bool OnRequestMediaAccessPermission(CefRefPtr<CefBrowser> browser,
+                                                CefRefPtr<CefFrame> frame,
+                                                const CefString& requesting_origin,
+                                                uint32_t requested_permissions,
+                                                CefRefPtr<CefMediaAccessCallback> callback) override;
+    virtual bool OnShowPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                        uint64_t prompt_id,
+                                        const CefString& requesting_origin,
+                                        uint32_t requested_permissions,
+                                        CefRefPtr<CefPermissionPromptCallback> callback) override;
+    virtual void OnDismissPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                           uint64_t prompt_id,
+                                           cef_permission_request_result_t result) override;
+
+    // Permission action methods (safe to call from any thread):
+    // |allowedPermissions| must be 0 (deny) or the full requested mask.
+    void respondMediaAccess(uint64_t requestId, uint32_t allowedPermissions);
+    // |result| is a cef_permission_request_result_t.
+    void respondPermissionPrompt(uint64_t requestId, int result);
+
     // Download action methods:
     void continueDownload(uint32_t downloadId, const std::string& downloadPath, bool showDialog);
     void cancelDownload(uint32_t downloadId);
@@ -245,6 +278,20 @@ private:
     // Download callbacks maps keyed by downloadId
     std::unordered_map<uint32_t, CefRefPtr<CefBeforeDownloadCallback>> download_before_callbacks_;
     std::unordered_map<uint32_t, CefRefPtr<CefDownloadItemCallback>> download_item_callbacks_;
+
+    // Pending permission requests. Only accessed on the CEF UI thread.
+    struct PendingMediaAccess {
+        int browserId;
+        uint32_t requested;
+        CefRefPtr<CefMediaAccessCallback> callback;
+    };
+    struct PendingPermissionPrompt {
+        int browserId;
+        CefRefPtr<CefPermissionPromptCallback> callback;
+    };
+    std::unordered_map<uint64_t, PendingMediaAccess> media_access_callbacks_;
+    std::unordered_map<uint64_t, PendingPermissionPrompt> permission_prompt_callbacks_;
+    uint64_t next_media_request_id_ = 1;
 
 #ifdef WEBVIEW_CEF_GPU_TEXTURE
     // GPU diagnostic state: whether any accelerated-paint frame has arrived, and

@@ -158,6 +158,21 @@ bool WebviewHandler::DoClose(CefRefPtr<CefBrowser> browser) {
 
 void WebviewHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
     CEF_REQUIRE_UI_THREAD();
+    // Drop any media request still waiting on the host. Releasing the callback
+    // without calling Continue cancels the request. Permission prompts are
+    // dismissed by CEF itself (OnDismissPermissionPrompt).
+    const int browserId = browser->GetIdentifier();
+    for (auto it = media_access_callbacks_.begin(); it != media_access_callbacks_.end();) {
+        if (it->second.browserId == browserId) {
+            const uint64_t requestId = it->first;
+            it = media_access_callbacks_.erase(it);
+            if (onPermissionDismissedEvent) {
+                onPermissionDismissedEvent(browserId, requestId, true);
+            }
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -325,6 +340,94 @@ void WebviewHandler::resumeDownload(uint32_t downloadId) {
     }
 }
 
+bool WebviewHandler::OnRequestMediaAccessPermission(CefRefPtr<CefBrowser> browser,
+                                                    CefRefPtr<CefFrame> frame,
+                                                    const CefString& requesting_origin,
+                                                    uint32_t requested_permissions,
+                                                    CefRefPtr<CefMediaAccessCallback> callback) {
+    CEF_REQUIRE_UI_THREAD();
+    if (!onPermissionRequestEvent || requested_permissions == CEF_MEDIA_PERMISSION_NONE) {
+        // No host UI to ask: deny rather than fall back to CEF's default.
+        callback->Cancel();
+        return true;
+    }
+    const uint64_t requestId = next_media_request_id_++;
+    const int browserId = browser->GetIdentifier();
+    media_access_callbacks_[requestId] = {browserId, requested_permissions, callback};
+    onPermissionRequestEvent(browserId, requestId, true, requesting_origin.ToString(), requested_permissions);
+    return true;
+}
+
+bool WebviewHandler::OnShowPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                            uint64_t prompt_id,
+                                            const CefString& requesting_origin,
+                                            uint32_t requested_permissions,
+                                            CefRefPtr<CefPermissionPromptCallback> callback) {
+    CEF_REQUIRE_UI_THREAD();
+    if (!onPermissionRequestEvent) {
+        return false; // Alloy default: CEF_PERMISSION_RESULT_IGNORE.
+    }
+    const int browserId = browser->GetIdentifier();
+    permission_prompt_callbacks_[prompt_id] = {browserId, callback};
+    onPermissionRequestEvent(browserId, prompt_id, false, requesting_origin.ToString(), requested_permissions);
+    return true;
+}
+
+void WebviewHandler::OnDismissPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                               uint64_t prompt_id,
+                                               cef_permission_request_result_t result) {
+    CEF_REQUIRE_UI_THREAD();
+    // Also fires after our own Continue(); only report prompts the host never
+    // answered (navigation, browser closed, ...).
+    auto it = permission_prompt_callbacks_.find(prompt_id);
+    if (it == permission_prompt_callbacks_.end()) {
+        return;
+    }
+    permission_prompt_callbacks_.erase(it);
+    if (onPermissionDismissedEvent) {
+        onPermissionDismissedEvent(browser->GetIdentifier(), prompt_id, false);
+    }
+}
+
+void WebviewHandler::respondMediaAccess(uint64_t requestId, uint32_t allowedPermissions) {
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::respondMediaAccess, this, requestId, allowedPermissions));
+        return;
+    }
+    auto it = media_access_callbacks_.find(requestId);
+    if (it == media_access_callbacks_.end()) {
+        return;
+    }
+    PendingMediaAccess pending = it->second;
+    media_access_callbacks_.erase(it);
+    // CEF requires the allowed mask to equal the requested mask; anything else
+    // is treated as a denial.
+    if (allowedPermissions != 0 && allowedPermissions == pending.requested) {
+        pending.callback->Continue(allowedPermissions);
+    } else {
+        pending.callback->Cancel();
+    }
+}
+
+void WebviewHandler::respondPermissionPrompt(uint64_t requestId, int result) {
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::respondPermissionPrompt, this, requestId, result));
+        return;
+    }
+    auto it = permission_prompt_callbacks_.find(requestId);
+    if (it == permission_prompt_callbacks_.end()) {
+        return;
+    }
+    CefRefPtr<CefPermissionPromptCallback> callback = it->second.callback;
+    // Erase first so the OnDismissPermissionPrompt that follows Continue() is
+    // not reported back to the host as an unanswered dismissal.
+    permission_prompt_callbacks_.erase(it);
+    if (result < CEF_PERMISSION_RESULT_ACCEPT || result >= CEF_PERMISSION_RESULT_NUM_VALUES) {
+        result = CEF_PERMISSION_RESULT_DENY;
+    }
+    callback->Continue(static_cast<cef_permission_request_result_t>(result));
+}
+
 void WebviewHandler::CloseAllBrowsers(bool force_close) {
     if (browser_map_.empty()){
         return;
@@ -459,9 +562,14 @@ void WebviewHandler::changeSize(int browserId, float a_dpi, int w, int h)
 {
     auto it = browser_map_.find(browserId);
     if (it != browser_map_.end()) {
+        const bool scaleChanged = it->second.dpi != a_dpi;
         it->second.dpi = a_dpi;
         it->second.width = w;
         it->second.height = h;
+        if (scaleChanged) {
+            // Re-query GetScreenInfo; WasResized alone keeps the old scale.
+            it->second.browser->GetHost()->NotifyScreenInfoChanged();
+        }
         it->second.browser->GetHost()->WasResized();
     }
 }
@@ -906,9 +1014,15 @@ void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) {
 }
 
 bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) {
-    //todo: hi dpi support
-    screen_info.device_scale_factor  = browser_map_[browser->GetIdentifier()].dpi;
-    return false;
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it == browser_map_.end() || it->second.dpi <= 0.0f) {
+        return false;
+    }
+    // Must return true: CEF ignores |screen_info| otherwise and renders at a
+    // scale of 1.0, which Flutter then stretches to the physical size (blurry
+    // pages on any display whose device pixel ratio is above 1).
+    screen_info.device_scale_factor = it->second.dpi;
+    return true;
 }
 
 void write_to_vector(png_structp png_ptr, png_bytep data, png_size_t length) {
