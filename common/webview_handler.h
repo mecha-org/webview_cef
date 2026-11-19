@@ -15,6 +15,9 @@
 #include <thread>
 
 #include "webview_cookieVisitor.h"
+#if defined(OS_LINUX) && defined(WEBVIEW_CEF_GPU_TEXTURE)
+#include "webview_dmabuf_reader.h"
+#endif
 
 #if defined(_WIN32)
 #define FLUTTER_PLUGIN_EXPORT __declspec(dllexport)
@@ -236,6 +239,12 @@ public:
 
     CaptureCompleteCallback onCaptureCompleteCallback = nullptr;
 
+    // Downscales a BGRA or RGBA frame and encodes it as a PNG for
+    // onCaptureCompleteCallback.
+    static void encodeCapture(CaptureCompleteCallback cb, int browserId,
+                              const unsigned char *src, int w, int h,
+                              size_t stride, bool bgra);
+
 private:
     // List of existing browser windows. Only accessed on the CEF UI thread.
     std::unordered_map<int, browser_info> browser_map_;
@@ -252,6 +261,10 @@ private:
     // Only declared on GPU builds so non-GPU builds don't see unused fields.
     bool received_accelerated_frame_ = false;
     bool gpu_warning_logged_ = false;
+#if defined(OS_LINUX)
+    // Reads OnAcceleratedPaint frames back for captureScreenshot.
+    DmabufReader dmabuf_reader_;
+#endif
 #endif
 
     // Include the default reference counting implementation.

@@ -10,6 +10,9 @@
 #include <chrono>
 #include <unordered_map>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <memory>
 #include <png.h>
 #include <zlib.h>
 
@@ -916,6 +919,108 @@ void write_to_vector(png_structp png_ptr, png_bytep data, png_size_t length) {
     buf->insert(buf->end(), data, data + length);
 }
 
+namespace {
+
+// Encodes a PNG on a background thread and reports it to |cb|.
+void encodePngAsync(CaptureCompleteCallback cb, int browserId,
+                    std::shared_ptr<std::vector<unsigned char>> rgb,
+                    int width, int height)
+{
+    std::thread([rgb, browserId, width, height, cb]()
+                {
+        std::vector<unsigned char> pngBuf;
+        png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+        if (!png_ptr) {
+            if (cb) cb(browserId, false, nullptr, 0);
+            return;
+        }
+
+        png_infop info_ptr = png_create_info_struct(png_ptr);
+        if (!info_ptr) {
+            png_destroy_write_struct(&png_ptr, NULL);
+            if (cb) cb(browserId, false, nullptr, 0);
+            return;
+        }
+
+        if (setjmp(png_jmpbuf(png_ptr))) {
+            png_destroy_write_struct(&png_ptr, &info_ptr);
+            if (cb) cb(browserId, false, nullptr, 0);
+            return;
+        }
+
+        png_set_write_fn(png_ptr, &pngBuf, write_to_vector, NULL);
+        png_set_IHDR(png_ptr, info_ptr, width, height,
+                     8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+                     PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+        png_set_compression_level(png_ptr, 6);
+        png_set_compression_strategy(png_ptr, Z_RLE);
+        png_set_filter(png_ptr, 0, PNG_FILTER_SUB);
+
+        png_write_info(png_ptr, info_ptr);
+
+        const unsigned char* px = rgb->data();
+        for (int y = 0; y < height; y++) {
+            png_write_row(png_ptr, const_cast<png_bytep>(px + (size_t)y * width * 3));
+        }
+
+        png_write_end(png_ptr, NULL);
+        png_destroy_write_struct(&png_ptr, &info_ptr);
+
+        if (!cb) return;
+        // The Dart side receives this asynchronously, after this thread has
+        // moved on, so it gets its own copy and frees it with
+        // webview_cef_free_capture().
+        auto* out = static_cast<unsigned char*>(malloc(pngBuf.size()));
+        if (out == nullptr) {
+            cb(browserId, false, nullptr, 0);
+            return;
+        }
+        memcpy(out, pngBuf.data(), pngBuf.size());
+        cb(browserId, true, out, pngBuf.size()); })
+        .detach();
+}
+
+} // namespace
+
+void WebviewHandler::encodeCapture(CaptureCompleteCallback cb, int browserId,
+                                   const unsigned char *src, int w, int h,
+                                   size_t stride, bool bgra)
+{
+    // Downscale to at most ~480 rows and pack to RGB here, on the paint
+    // thread, straight from |src| (which is only valid during the paint).
+    int target_h = h;
+    int target_w = w;
+    int scale = 1;
+    if (h > 480)
+    {
+        scale = (h + 479) / 480;
+        target_h = h / scale;
+        target_w = w / scale;
+    }
+
+    auto small = std::make_shared<std::vector<unsigned char>>(
+        (size_t)target_w * target_h * 3);
+    unsigned char *dst = small->data();
+    const int r = bgra ? 2 : 0;
+    const int b = bgra ? 0 : 2;
+
+    for (int y = 0; y < target_h; y++)
+    {
+        const unsigned char *row = src + (size_t)(y * scale) * stride;
+        for (int x = 0; x < target_w; x++)
+        {
+            const unsigned char *px = row + (size_t)(x * scale) * 4;
+            int dstIdx = (y * target_w + x) * 3;
+            dst[dstIdx + 0] = px[r];
+            dst[dstIdx + 1] = px[1];
+            dst[dstIdx + 2] = px[b];
+        }
+    }
+
+    encodePngAsync(cb, browserId, small, target_w, target_h);
+}
+
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
                              const CefRenderHandler::RectList &dirtyRects, const void *buffer, int w, int h)
 {
@@ -933,86 +1038,9 @@ void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::Pa
             if (it->second.capture_requested)
             {
                 it->second.capture_requested = false;
-
-                // --- Resize + BGRA->RGB pack happens HERE, on the UI/paint thread,
-                // directly from the live `buffer` — no full-frame copy first.
-                int target_h = h;
-                int target_w = w;
-                int scale = 1;
-                if (h > 480)
-                {
-                    scale = (h + 479) / 480;
-                    target_h = h / scale;
-                    target_w = w / scale;
-                }
-
-                auto small = std::make_shared<std::vector<unsigned char>>(
-                    (size_t)target_w * target_h * 3);
-
-                const unsigned char *src = static_cast<const unsigned char *>(buffer);
-                unsigned char *dst = small->data();
-
-                for (int y = 0; y < target_h; y++)
-                {
-                    int src_y = y * scale;
-                    for (int x = 0; x < target_w; x++)
-                    {
-                        int src_x = x * scale;
-                        int srcIdx = (src_y * w + src_x) * 4; // BGRA
-                        int dstIdx = (y * target_w + x) * 3;
-                        dst[dstIdx + 0] = src[srcIdx + 2]; // R
-                        dst[dstIdx + 1] = src[srcIdx + 1]; // G
-                        dst[dstIdx + 2] = src[srcIdx + 0]; // B
-                    }
-                }
-
-                // Background thread encodes to memory and invokes the Dart callback
-                std::thread([small, browserId, target_w, target_h, cb = onCaptureCompleteCallback]()
-                            {
-                    std::vector<unsigned char> pngBuf;
-                    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-                    if (!png_ptr) {
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    png_infop info_ptr = png_create_info_struct(png_ptr);
-                    if (!info_ptr) {
-                        png_destroy_write_struct(&png_ptr, NULL);
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    if (setjmp(png_jmpbuf(png_ptr))) {
-                        png_destroy_write_struct(&png_ptr, &info_ptr);
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    png_set_write_fn(png_ptr, &pngBuf, write_to_vector, NULL);
-                    png_set_IHDR(png_ptr, info_ptr, target_w, target_h,
-                                 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-
-                    png_set_compression_level(png_ptr, 6);
-                    png_set_compression_strategy(png_ptr, Z_RLE);
-                    png_set_filter(png_ptr, 0, PNG_FILTER_SUB);
-
-                    png_write_info(png_ptr, info_ptr);
-
-                    const unsigned char* px = small->data();
-                    for (int y = 0; y < target_h; y++) {
-                        png_write_row(png_ptr, const_cast<png_bytep>(px + (size_t)y * target_w * 3));
-                    }
-
-                    png_write_end(png_ptr, NULL);
-                    
-                    if (cb) {
-                        cb(browserId, true, pngBuf.data(), pngBuf.size());
-                    }
-
-                    png_destroy_write_struct(&png_ptr, &info_ptr);
-                }).detach();
+                encodeCapture(onCaptureCompleteCallback, browserId,
+                              static_cast<const unsigned char *>(buffer), w, h,
+                              (size_t)w * 4, /*bgra=*/true);
             }
             it->second.width = w;
             it->second.height = h;
@@ -1045,6 +1073,27 @@ void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRender
                 it->second.focus_reasserted = true;
                 it->second.browser->GetHost()->SetFocus(true);
             }
+#if defined(OS_LINUX)
+            // OnPaint never runs on this path, so screenshots are read back
+            // from the shared texture, which is only valid during this call.
+            if (it->second.capture_requested)
+            {
+                it->second.capture_requested = false;
+                std::vector<uint8_t> rgba;
+                int cw = 0, ch = 0;
+                const int bw = static_cast<int>(w * it->second.dpi);
+                const int bh = static_cast<int>(h * it->second.dpi);
+                if (dmabuf_reader_.Read(info, bw, bh, rgba, cw, ch))
+                {
+                    encodeCapture(onCaptureCompleteCallback, browser->GetIdentifier(),
+                                  rgba.data(), cw, ch, (size_t)cw * 4, /*bgra=*/false);
+                }
+                else if (onCaptureCompleteCallback)
+                {
+                    onCaptureCompleteCallback(browser->GetIdentifier(), false, nullptr, 0);
+                }
+            }
+#endif
         }
         // The shared texture is pool-owned and only valid for the duration of
         // this callback. On Windows it is a HANDLE (open with

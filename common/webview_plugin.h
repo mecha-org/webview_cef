@@ -85,6 +85,7 @@ namespace webview_cef {
 
     extern "C" {
         FLUTTER_PLUGIN_EXPORT void webview_cef_set_capture_complete_callback(CaptureCompleteCallback callback);
+        FLUTTER_PLUGIN_EXPORT void webview_cef_free_capture(unsigned char* data);
     }
 }
 

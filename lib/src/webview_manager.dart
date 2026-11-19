@@ -39,10 +39,16 @@ class WebviewManager extends ValueNotifier<bool> {
 
   late final _captureCallback = NativeCallable<CaptureCompleteCallbackNative>.listener(_onCaptureComplete);
 
+  void Function(Pointer<Uint8>)? _freeCapture;
+
   void _onCaptureComplete(int browserId, bool success, Pointer<Uint8> data, int size) {
+    // The native side hands over a buffer of its own: copy it, then free it.
+    final bytes =
+        success && data != nullptr ? Uint8List.fromList(data.asTypedList(size)) : null;
+    if (data != nullptr) _freeCapture?.call(data);
     final completer = _pendingCaptures.remove(browserId);
     if (completer == null) return;
-    completer.complete(success ? data.asTypedList(size) : null);
+    completer.complete(bytes);
   }
 
   void _registerCaptureCallback() {
@@ -58,6 +64,8 @@ class WebviewManager extends ValueNotifier<bool> {
                       Pointer<NativeFunction<CaptureCompleteCallbackNative>>),
                   void Function(
                       Pointer<NativeFunction<CaptureCompleteCallbackNative>>)>('webview_cef_set_capture_complete_callback');
+      _freeCapture = lib.lookupFunction<Void Function(Pointer<Uint8>),
+          void Function(Pointer<Uint8>)>('webview_cef_free_capture');
       setCallback(_captureCallback.nativeFunction);
     } catch (e) {
       debugPrint('Failed to register capture callback: $e');
