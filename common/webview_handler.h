@@ -261,6 +261,8 @@ private:
     // Only declared on GPU builds so non-GPU builds don't see unused fields.
     bool received_accelerated_frame_ = false;
     bool gpu_warning_logged_ = false;
+    // Whether the warning check has been scheduled (on the first page load).
+    bool gpu_warning_scheduled_ = false;
 #if defined(OS_LINUX)
     // Reads OnAcceleratedPaint frames back for captureScreenshot.
     DmabufReader dmabuf_reader_;

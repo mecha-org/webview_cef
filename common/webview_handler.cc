@@ -226,6 +226,17 @@ void WebviewHandler::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFra
 
 void WebviewHandler::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                int httpStatusCode) {
+#ifdef WEBVIEW_CEF_GPU_TEXTURE
+    // The GPU shared-texture path is the only render path on this build (no
+    // OnPaint fallback). Once a page has loaded it should have painted, so if
+    // no accelerated frame follows shortly, warn so a black webview isn't
+    // silent. Timed from the load, not from browser creation, because startup
+    // on slow devices can take longer than any fixed delay.
+    if (frame->IsMain() && !received_accelerated_frame_ && !gpu_warning_scheduled_) {
+        gpu_warning_scheduled_ = true;
+        CefPostDelayedTask(TID_UI, base::BindOnce(&WebviewHandler::warnIfNoAcceleratedFrame, this), 2000);
+    }
+#endif
     if(onLoadEnd){
         onLoadEnd(browser->GetIdentifier(), frame->GetURL());
     }
@@ -395,13 +406,6 @@ void WebviewHandler::createBrowser(std::string url, bool isPrivate, std::functio
         return;
     }
     callback(browser->GetIdentifier());
-#ifdef WEBVIEW_CEF_GPU_TEXTURE
-    // The GPU shared-texture path is the only render path on this build (no
-    // OnPaint fallback). If no accelerated frame arrives shortly, the GPU
-    // compositor likely can't export a shared texture — warn so a black webview
-    // isn't silent.
-    CefPostDelayedTask(TID_UI, base::BindOnce(&WebviewHandler::warnIfNoAcceleratedFrame, this), 5000);
-#endif
 }
 
 void WebviewHandler::warnIfNoAcceleratedFrame() {
@@ -409,7 +413,7 @@ void WebviewHandler::warnIfNoAcceleratedFrame() {
     if (!received_accelerated_frame_ && !gpu_warning_logged_) {
         gpu_warning_logged_ = true;
         fprintf(stderr,
-                "[webview_cef] WARNING: no GPU accelerated-paint frame after 5s. "
+                "[webview_cef] WARNING: no GPU accelerated-paint frame 2s after the page loaded. "
                 "This build renders the webview only via the GPU shared-texture "
                 "path; if it appears black, the GPU compositor may be unavailable "
                 "(headless, VM, software GL, or a crashed GPU process).\n");
