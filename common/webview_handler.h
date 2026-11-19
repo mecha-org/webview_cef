@@ -67,7 +67,9 @@ public:
     std::function<void(int browserId, int type)>onCursorChangedEvent;
     std::function<void(int browserId, std::string text)> onTooltipEvent;
     std::function<void(int browserId, int level, std::string message, std::string source, int line)>onConsoleMessageEvent;
-    std::function<void(int browserId, bool editable)> onFocusedNodeChangeMessage;
+    // |inputHint| is the keyboard hint of the focused field ("url", "email",
+    // "phone", "number", "multiline" or "text"); empty when not editable.
+    std::function<void(int browserId, bool editable, std::string inputHint)> onFocusedNodeChangeMessage;
     std::function<void(int browserId, int32_t x, int32_t y, int32_t height)> onImeCompositionRangeChangedMessage;
     //webpage message
     std::function<void(std::string, std::string, std::string, int browserId, std::string)> onJavaScriptChannelMessage;
