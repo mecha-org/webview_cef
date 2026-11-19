@@ -6,6 +6,7 @@
 
 #include <math.h>
 #include <memory>
+#include <cstdlib>
 #include <thread>
 #include <iostream>
 #include <unordered_map>
@@ -978,5 +979,10 @@ extern "C" {
         if (webview_cef::g_plugin_for_ffi) {
             webview_cef::g_plugin_for_ffi->setCaptureCompleteCallback(callback);
         }
+    }
+
+    // Frees the PNG passed to the capture callback, once Dart has copied it.
+    FLUTTER_PLUGIN_EXPORT void webview_cef_free_capture(unsigned char* data) {
+        free(data);
     }
 }
