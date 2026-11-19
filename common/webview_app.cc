@@ -157,7 +157,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 
         // Features (Enable/Disable)
         command_line->AppendSwitchWithValue("disable-features", "EnableHangWatcher,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,CalculateNativeWinOcclusion,TranslateUI,MediaRouter,OptimizationGuideModelDownloading");
-        command_line->AppendSwitchWithValue("enable-features", "UseOzonePlatform");
+        command_line->AppendSwitchWithValue("enable-features", "UseOzonePlatform,WebRtcPipeWireCamera");
 
 		//http://www.chromium.org/developers/design-documents/process-models
 		if (m_uMode == 1)
