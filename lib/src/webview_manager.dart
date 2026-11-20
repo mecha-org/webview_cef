@@ -204,6 +204,14 @@ class WebviewManager extends ValueNotifier<bool> {
         bool editable = call.arguments['editable'] as bool;
         _webViews[browserId]?.onFocusedNodeChangeMessage(editable);
         return;
+      case 'onQuickMenu':
+        int browserId = call.arguments['browserId'] as int;
+        _webViews[browserId]?.touchSelection.onQuickMenu(call.arguments);
+        return;
+      case 'onTouchHandle':
+        int browserId = call.arguments['browserId'] as int;
+        _webViews[browserId]?.touchSelection.onTouchHandle(call.arguments);
+        return;
       case 'onImeCompositionRangeChangedMessage':
         int browserId = call.arguments['browserId'] as int;
         _webViews[browserId]?.onImeCompositionRangeChangedMessage?.call(

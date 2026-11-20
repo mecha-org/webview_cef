@@ -229,6 +229,49 @@ namespace webview_cef {
 			};
 
 
+			// Touch selection. Fields are sent as plain ints/doubles in a map.
+			auto sendSelectionEvent = [=, this](const char* method, std::initializer_list<std::pair<const char*, WValue*>> fields)
+			{
+				WValue* retMap = webview_value_new_map();
+				for (const auto& field : fields) {
+					webview_value_set_string(retMap, field.first, field.second);
+					webview_value_unref(field.second);
+				}
+				m_invokeFunc(method, retMap);
+				webview_value_unref(retMap);
+			};
+
+			m_handler->onQuickMenuEvent = [=, this](int nBrowserId, bool visible, int32_t x, int32_t y, int32_t width, int32_t height, int flags)
+			{
+				if (!m_invokeFunc)
+					return;
+				sendSelectionEvent("onQuickMenu", {
+					{"browserId", webview_value_new_int(nBrowserId)},
+					{"visible", webview_value_new_bool(visible)},
+					{"x", webview_value_new_int(x)},
+					{"y", webview_value_new_int(y)},
+					{"width", webview_value_new_int(width)},
+					{"height", webview_value_new_int(height)},
+					{"flags", webview_value_new_int(flags)},
+				});
+			};
+
+			m_handler->onTouchHandleEvent = [=, this](int nBrowserId, int handleId, int flags, bool enabled, int orientation, int32_t x, int32_t y, float alpha)
+			{
+				if (!m_invokeFunc)
+					return;
+				sendSelectionEvent("onTouchHandle", {
+					{"browserId", webview_value_new_int(nBrowserId)},
+					{"id", webview_value_new_int(handleId)},
+					{"flags", webview_value_new_int(flags)},
+					{"enabled", webview_value_new_bool(enabled)},
+					{"orientation", webview_value_new_int(orientation)},
+					{"x", webview_value_new_int(x)},
+					{"y", webview_value_new_int(y)},
+					{"alpha", webview_value_new_double(alpha)},
+				});
+			};
+
             m_handler->onLoadStart = [=, this](int nBrowserId, std::string urlId)
             {
                 if (m_invokeFunc)
@@ -505,6 +548,12 @@ namespace webview_cef {
 		else if (name.compare("reload") == 0) {
 			int browserId = int(webview_value_get_int(values));
 			m_handler->reload(browserId);
+			result(1, nullptr);
+		}
+		else if (name.compare("quickMenuAction") == 0) {
+			int browserId = int(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			int action = int(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->quickMenuAction(browserId, action);
 			result(1, nullptr);
 		}
 		else if (name.compare("wasHidden") == 0)

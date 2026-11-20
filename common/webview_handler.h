@@ -7,6 +7,7 @@
 
 #include "include/cef_client.h"
 #include "include/cef_download_handler.h"
+#include "include/cef_context_menu_handler.h"
 
 #include <functional>
 #include <list>
@@ -42,6 +43,8 @@ struct browser_info{
     // Store last painted buffer for screenshot capture
     std::vector<unsigned char> last_paint_buffer;
     bool capture_requested = false;
+    // Pending touch-selection quick menu; run by quickMenuAction().
+    CefRefPtr<CefRunQuickMenuCallback> quick_menu_callback;
 };
 
 class WebviewHandler : public CefClient,
@@ -50,7 +53,8 @@ public CefLifeSpanHandler,
 public CefFocusHandler,
 public CefLoadHandler,
 public CefRenderHandler,
-public CefDownloadHandler{
+public CefDownloadHandler,
+public CefContextMenuHandler{
 public:
     //Paint callback (software off-screen rendering)
     std::function<void(int browserId, const void* buffer, int32_t width, int32_t height)> onPaintCallback;
@@ -69,6 +73,10 @@ public:
     std::function<void(int browserId, int level, std::string message, std::string source, int line)>onConsoleMessageEvent;
     std::function<void(int browserId, bool editable)> onFocusedNodeChangeMessage;
     std::function<void(int browserId, int32_t x, int32_t y, int32_t height)> onImeCompositionRangeChangedMessage;
+    //touch selection: quick menu shown (visible) over the selection rect, or hidden
+    std::function<void(int browserId, bool visible, int32_t x, int32_t y, int32_t width, int32_t height, int flags)> onQuickMenuEvent;
+    //touch selection: partial handle state; only the fields named in |flags| are set
+    std::function<void(int browserId, int handleId, int flags, bool enabled, int orientation, int32_t x, int32_t y, float alpha)> onTouchHandleEvent;
     //webpage message
     std::function<void(std::string, std::string, std::string, int browserId, std::string)> onJavaScriptChannelMessage;
     std::function<void(int browserId, std::string url)> onLoadStart;
@@ -94,6 +102,15 @@ public:
     virtual CefRefPtr<CefLoadHandler> GetLoadHandler() override { return static_cast<CefLoadHandler*>(this); }
     virtual CefRefPtr<CefRenderHandler> GetRenderHandler() override { return static_cast<CefRenderHandler*>(this); }
     virtual CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return static_cast<CefDownloadHandler*>(this); }
+    virtual CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return static_cast<CefContextMenuHandler*>(this); }
+
+    // CefContextMenuHandler: touch selection quick menu (windowless).
+    bool RunContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefContextMenuParams> params, CefRefPtr<CefMenuModel> model, CefRefPtr<CefRunContextMenuCallback> callback) override;
+    bool RunQuickMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, const CefPoint& location, const CefSize& size, QuickMenuEditStateFlags edit_state_flags, CefRefPtr<CefRunQuickMenuCallback> callback) override;
+    void OnQuickMenuDismissed(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame) override;
+    // CefRenderHandler: touch selection handles, drawn by the Dart side.
+    void GetTouchHandleSize(CefRefPtr<CefBrowser> browser, cef_horizontal_alignment_t orientation, CefSize& size) override;
+    void OnTouchHandleStateChanged(CefRefPtr<CefBrowser> browser, const CefTouchHandleState& state) override;
 
 	bool OnProcessMessageReceived(
         CefRefPtr<CefBrowser> browser,
@@ -209,6 +226,8 @@ public:
     void goForward(int browserId);
     void goBack(int browserId);
     void reload(int browserId);
+    // Runs a quick menu action for the touch selection: see QuickMenuAction.
+    void quickMenuAction(int browserId, int action);
     void openDevTools(int browserId);
     bool canGoForward(int browserId);
     bool canGoBack(int browserId);
