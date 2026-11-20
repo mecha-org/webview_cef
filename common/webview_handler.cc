@@ -1068,3 +1068,93 @@ void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRender
     }
 #endif
 }
+// ---------------------------------------------------------------------------
+// Touch selection (long press). selects the text, tracks the handles
+// and decides which edit actions are allowed; we only forward that state to
+// Dart, which draws the handles and the cut/copy/paste toolbar.
+// ---------------------------------------------------------------------------
+
+// Size Chromium uses to hit-test the touch handles; the Dart side draws them
+// at the same size.
+static constexpr int kTouchHandleSize = 32;
+
+// Actions from Dart (quickMenuAction). Keep in sync with webview.dart.
+enum QuickMenuAction {
+    kQuickMenuDismiss = 0,
+    kQuickMenuCut = 1,
+    kQuickMenuCopy = 2,
+    kQuickMenuPaste = 3,
+    kQuickMenuSelectAll = 4,
+};
+
+bool WebviewHandler::RunContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefContextMenuParams> params, CefRefPtr<CefMenuModel> model, CefRefPtr<CefRunContextMenuCallback> callback)
+{
+    // No context menu: a long press is handled as touch selection instead.
+    callback->Cancel();
+    return true;
+}
+
+bool WebviewHandler::RunQuickMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, const CefPoint& location, const CefSize& size, QuickMenuEditStateFlags edit_state_flags, CefRefPtr<CefRunQuickMenuCallback> callback)
+{
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it == browser_map_.end()) {
+        return false;
+    }
+    if (it->second.quick_menu_callback) {
+        it->second.quick_menu_callback->Cancel();
+    }
+    it->second.quick_menu_callback = callback;
+    if (onQuickMenuEvent) {
+        onQuickMenuEvent(browser->GetIdentifier(), true, location.x, location.y, size.width, size.height, edit_state_flags);
+    }
+    return true;
+}
+
+void WebviewHandler::OnQuickMenuDismissed(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame)
+{
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it != browser_map_.end()) {
+        it->second.quick_menu_callback = nullptr;
+    }
+    if (onQuickMenuEvent) {
+        onQuickMenuEvent(browser->GetIdentifier(), false, 0, 0, 0, 0, 0);
+    }
+}
+
+void WebviewHandler::GetTouchHandleSize(CefRefPtr<CefBrowser> browser, cef_horizontal_alignment_t orientation, CefSize& size)
+{
+    size = CefSize(kTouchHandleSize, kTouchHandleSize);
+}
+
+void WebviewHandler::OnTouchHandleStateChanged(CefRefPtr<CefBrowser> browser, const CefTouchHandleState& state)
+{
+    if (onTouchHandleEvent) {
+        onTouchHandleEvent(browser->GetIdentifier(), state.touch_handle_id, state.flags, state.enabled,
+                           state.orientation, state.origin.x, state.origin.y, state.alpha);
+    }
+}
+
+void WebviewHandler::quickMenuAction(int browserId, int action)
+{
+    auto it = browser_map_.find(browserId);
+    if (it == browser_map_.end()) {
+        return;
+    }
+    if (action == kQuickMenuSelectAll) {
+        // Not a quick menu command: select everything and let Chromium show a
+        // new quick menu for the new selection.
+        it->second.browser->GetFocusedFrame()->SelectAll();
+        return;
+    }
+    CefRefPtr<CefRunQuickMenuCallback> callback = it->second.quick_menu_callback;
+    if (!callback) {
+        return;
+    }
+    it->second.quick_menu_callback = nullptr;
+    switch (action) {
+        case kQuickMenuCut: callback->Continue(QM_EDITFLAG_CAN_CUT, EVENTFLAG_NONE); break;
+        case kQuickMenuCopy: callback->Continue(QM_EDITFLAG_CAN_COPY, EVENTFLAG_NONE); break;
+        case kQuickMenuPaste: callback->Continue(QM_EDITFLAG_CAN_PASTE, EVENTFLAG_NONE); break;
+        default: callback->Cancel(); break;
+    }
+}
