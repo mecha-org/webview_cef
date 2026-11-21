@@ -541,6 +541,28 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
         _controller.imeCommitText(inserted);
       }
     }
+    _resetEditingState();
+  }
+
+  /// Text kept in the embedder's editing model while a page field is
+  /// focused. The page's own text never reaches Flutter, so an empty model
+  /// would make the embedder drop backspace (nothing to delete) before it
+  /// is forwarded, and text already in the field couldn't be erased.
+  static final String _editingPadding = ' ' * 64;
+
+  void _resetEditingState() {
+    // Only the eLinux embedder edits through this model.
+    if (_hasNativeKeySupport != false) return;
+    setTextInputEditingValue(TextEditingValue(
+      text: _editingPadding,
+      selection: TextSelection.collapsed(offset: _editingPadding.length),
+    ));
+  }
+
+  @override
+  attachTextInputClient() {
+    super.attachTextInputClient();
+    _resetEditingState();
   }
 
   @override
@@ -618,6 +640,13 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     // This prevents doubling because updateEditingValueWithDeltas/onVirtualEditingValue
     // will be responsible for sending the text to CEF.
     if (character != null && character.isNotEmpty) {
+      return KeyEventResult.ignored;
+    }
+
+    // In a page field the embedder also feeds backspace to the editing
+    // model, and onVirtualEditingValue forwards that; don't send it twice.
+    if (logicalKey == LogicalKeyboardKey.backspace &&
+        _controller._focusEditable) {
       return KeyEventResult.ignored;
     }
 
