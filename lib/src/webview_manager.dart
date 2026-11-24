@@ -202,7 +202,9 @@ class WebviewManager extends ValueNotifier<bool> {
       case 'onFocusedNodeChangeMessage':
         int browserId = call.arguments['browserId'] as int;
         bool editable = call.arguments['editable'] as bool;
-        _webViews[browserId]?.onFocusedNodeChangeMessage(editable);
+        // Missing from older native builds: fall back to the normal keyboard.
+        String inputHint = call.arguments['inputHint'] as String? ?? '';
+        _webViews[browserId]?.onFocusedNodeChangeMessage(editable, inputHint);
         return;
       case 'onQuickMenu':
         int browserId = call.arguments['browserId'] as int;

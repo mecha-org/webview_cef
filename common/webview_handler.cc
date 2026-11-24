@@ -61,8 +61,13 @@ bool WebviewHandler::OnProcessMessageReceived(
     if (message_name == kFocusedNodeChangedMessage)
     {
         current_focused_browser_ = browser;
-        bool editable = message->GetArgumentList()->GetBool(0);
-        onFocusedNodeChangeMessage(browser->GetIdentifier(), editable);
+        CefRefPtr<CefListValue> args = message->GetArgumentList();
+        bool editable = args->GetBool(0);
+        std::string inputHint;
+        if (editable && args->GetSize() > 4) {
+            inputHint = args->GetString(4).ToString();
+        }
+        onFocusedNodeChangeMessage(browser->GetIdentifier(), editable, inputHint);
         if (editable) {
             onImeCompositionRangeChangedMessage(browser->GetIdentifier(), message->GetArgumentList()->GetInt(1), message->GetArgumentList()->GetInt(2), message->GetArgumentList()->GetInt(3));
         }

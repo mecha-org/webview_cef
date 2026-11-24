@@ -181,7 +181,7 @@ namespace webview_cef {
 				}
 			};
 
-			m_handler->onFocusedNodeChangeMessage = [=, this](int nBrowserId, bool bEditable)
+			m_handler->onFocusedNodeChangeMessage = [=, this](int nBrowserId, bool bEditable, std::string inputHint)
 			{
 				// Track editable focus per browser so the platform layer can route
 				// raw character keys to the OS IME while a web input is focused
@@ -196,12 +196,15 @@ namespace webview_cef {
 				{
 					WValue* bId = webview_value_new_int(int64_t(nBrowserId));
 					WValue* editable = webview_value_new_bool(bEditable);
+					WValue* hint = webview_value_new_string(const_cast<char*>(inputHint.c_str()));
 					WValue* retMap = webview_value_new_map();
 					webview_value_set_string(retMap, "browserId", bId);
 					webview_value_set_string(retMap, "editable", editable);
+					webview_value_set_string(retMap, "inputHint", hint);
 					m_invokeFunc("onFocusedNodeChangeMessage", retMap);
 					webview_value_unref(bId);
 					webview_value_unref(editable);
+					webview_value_unref(hint);
 					webview_value_unref(retMap);
 				}
 			};
