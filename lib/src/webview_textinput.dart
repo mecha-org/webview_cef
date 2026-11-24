@@ -57,6 +57,13 @@ mixin WebeViewTextInput implements DeltaTextInputClient {
     _textInputConnection?.close();
   }
 
+  /// Replaces the platform's editing state, e.g. to reset it after an edit
+  /// was forwarded to the page.
+  void setTextInputEditingValue(TextEditingValue value) {
+    currentTextEditingValue = value;
+    _textInputConnection?.setEditingState(value);
+  }
+
   updateIMEComposionPosition(double x, double y, double height, Offset offset) {
     // x/y are the caret position inside the webview (logical px), with y at the
     // caret's bottom (the native side reports the element/character bottom);

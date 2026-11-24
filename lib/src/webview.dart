@@ -10,6 +10,7 @@ import 'webview_javascript.dart';
 import 'webview_manager.dart';
 import 'webview_textinput.dart';
 import 'webview_tooltip.dart';
+import 'webview_touch_selection.dart';
 
 // CEF key event types
 const int keyEventRawKeyDown = 0;
@@ -119,6 +120,7 @@ class WebViewController extends ValueNotifier<bool> {
       WebviewManager().removeWebView(_browserId);
       await _pluginChannel.invokeMethod('close', _browserId);
     }
+    touchSelection.dispose();
     super.dispose();
   }
 
@@ -129,6 +131,19 @@ class WebViewController extends ValueNotifier<bool> {
     }
     assert(value);
     return _pluginChannel.invokeMethod('loadUrl', [_browserId, url]);
+  }
+
+  /// Long-press text selection on the page (handles and quick menu).
+  final WebTouchSelection touchSelection = WebTouchSelection();
+
+  /// Runs [action] on the current long-press selection.
+  Future<void> quickMenuAction(QuickMenuAction action) async {
+    if (_isDisposed) {
+      return;
+    }
+    assert(value);
+    return _pluginChannel
+        .invokeMethod('quickMenuAction', [_browserId, action.index]);
   }
 
   /// Height of app UI drawn over the bottom of the webview while the
@@ -404,6 +419,11 @@ class WebView extends StatefulWidget {
   static const double trackpadScrollSensitivity = 1.0;
   static const double touchScrollSensitivity = 1.0;
 
+  /// Horizontal touch swipes that start this close to the left or right
+  /// edge are not sent to the page: they belong to the host's back/forward
+  /// gesture.
+  static const double edgeSwipeWidth = 24.0;
+
   const WebView(this.controller, {super.key});
 
   @override
@@ -529,6 +549,28 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
         _controller.imeCommitText(inserted);
       }
     }
+    _resetEditingState();
+  }
+
+  /// Text kept in the embedder's editing model while a page field is
+  /// focused. The page's own text never reaches Flutter, so an empty model
+  /// would make the embedder drop backspace (nothing to delete) before it
+  /// is forwarded, and text already in the field couldn't be erased.
+  static final String _editingPadding = ' ' * 64;
+
+  void _resetEditingState() {
+    // Only the eLinux embedder edits through this model.
+    if (_hasNativeKeySupport != false) return;
+    setTextInputEditingValue(TextEditingValue(
+      text: _editingPadding,
+      selection: TextSelection.collapsed(offset: _editingPadding.length),
+    ));
+  }
+
+  @override
+  attachTextInputClient({String inputHint = ''}) {
+    super.attachTextInputClient(inputHint: inputHint);
+    _resetEditingState();
   }
 
   @override
@@ -608,6 +650,13 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     // This prevents doubling because updateEditingValueWithDeltas/onVirtualEditingValue
     // will be responsible for sending the text to CEF.
     if (character != null && character.isNotEmpty) {
+      return KeyEventResult.ignored;
+    }
+
+    // In a page field the embedder also feeds backspace to the editing
+    // model, and onVirtualEditingValue forwards that; don't send it twice.
+    if (logicalKey == LogicalKeyboardKey.backspace &&
+        _controller._focusEditable) {
       return KeyEventResult.ignored;
     }
 
@@ -724,10 +773,32 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
         key: _key,
         child: Transform.translate(
           offset: Offset(0, -_panOffset),
-          child: _buildInner(),
+          child: Stack(
+            children: [
+              Positioned.fill(child: _buildInner()),
+              Positioned.fill(
+                child: WebTouchSelectionOverlay(
+                  selection: _controller.touchSelection,
+                  onAction: _controller.quickMenuAction,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  /// Whether a horizontal swipe from [start] is the host's edge swipe rather
+  /// than a page gesture. Never true on a selection handle, so handles can be
+  /// dragged sideways.
+  bool _startsEdgeSwipe(Offset start) {
+    if (_controller.touchSelection.hitsHandle(start)) {
+      return false;
+    }
+    final width = context.size?.width ?? 0;
+    return start.dx <= WebView.edgeSwipeWidth ||
+        start.dx >= width - WebView.edgeSwipeWidth;
   }
 
   Widget _buildInner() {
@@ -739,6 +810,13 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
       child: SizeChangedLayoutNotifier(
         child: Listener(
           onPointerHover: (ev) {
+            // CEF hides the touch selection on any mouse event, and some
+            // compositors send pointer motion along with each touch. Keep
+            // hover moves away from CEF while a selection is showing, so a
+            // touch on a handle can drag it.
+            if (_controller.touchSelection.isActive) {
+              return;
+            }
             _controller._cursorMove(ev.localPosition);
             _tooltip?.cursorOffset = ev.position;
           },
@@ -786,7 +864,8 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
                 final dx = ev.localPosition.dx - _startPosition!.dx;
                 final dy = ev.localPosition.dy - _startPosition!.dy;
                 if (dx.abs() > 10 || dy.abs() > 10) {
-                  if (dx.abs() > dy.abs()) {
+                  if (dx.abs() > dy.abs() &&
+                      _startsEdgeSwipe(_startPosition!)) {
                     _gestureType = _TouchGestureType.horizontal;
                     _sendTouchEvent(ev, 3); // cancelled (CEF_TET_CANCELLED = 3)
                     _touchCancelled = true;
