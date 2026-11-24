@@ -101,6 +101,35 @@ WebviewApp::ProcessType WebviewApp::GetProcessType(CefRefPtr<CefCommandLine> com
 	return OtherProcess;
 }
 
+namespace {
+
+// Adds the comma-separated |features| to the |name| switch (e.g.
+// "disable-features"), keeping what is already there and skipping duplicates.
+void appendFeatures(CefRefPtr<CefCommandLine> command_line, const char *name,
+                    const std::string &features)
+{
+    std::string values = command_line->GetSwitchValue(name);
+    size_t start = 0;
+    while (start <= features.size())
+    {
+        size_t end = features.find(',', start);
+        if (end == std::string::npos)
+            end = features.size();
+        const std::string feature = features.substr(start, end - start);
+        if (!feature.empty() &&
+            ("," + values + ",").find("," + feature + ",") == std::string::npos)
+        {
+            if (!values.empty())
+                values += ",";
+            values += feature;
+        }
+        start = end + 1;
+    }
+    command_line->AppendSwitchWithValue(name, values);
+}
+
+} // namespace
+
 void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, CefRefPtr<CefCommandLine> command_line)
 {
     // Pass additional command-line flags to the browser process.
@@ -156,9 +185,17 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
         // Media
         command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required"); // autoplay policy for media
 
-        // Features (Enable/Disable)
-        command_line->AppendSwitchWithValue("disable-features", "EnableHangWatcher,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,CalculateNativeWinOcclusion,TranslateUI,MediaRouter,OptimizationGuideModelDownloading");
-        command_line->AppendSwitchWithValue("enable-features", "UseOzonePlatform");
+        // Features (Enable/Disable). Chromium only honours the last value of a
+        // switch, so add to any list CEF already set instead of replacing it.
+        // SameSite*: allow cross-domain requests.
+        appendFeatures(command_line, "disable-features",
+                       "EnableHangWatcher,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,"
+                       "CalculateNativeWinOcclusion,TranslateUI,MediaRouter,OptimizationGuideModelDownloading");
+        // AcceleratedVideo*/Vaapi*: Chromium doesn't use the VPU for video
+        // decoding on Linux unless these are on.
+        appendFeatures(command_line, "enable-features",
+                       "UseOzonePlatform,AcceleratedVideoDecodeLinuxGL,AcceleratedVideoDecodeLinuxZeroCopyGL,"
+                       "AcceleratedVideoDecoder,VaapiVideoDecode");
 
 		//http://www.chromium.org/developers/design-documents/process-models
 		if (m_uMode == 1)
@@ -175,22 +212,6 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 			command_line->AppendSwitch("single-process"); //all in one process
 		}
 
-        //Support cross domain requests
-        std::string values = command_line->GetSwitchValue("disable-features");
-        if (values == "")
-        {
-            values = "SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure";
-        }
-        else
-        {
-            values += ",SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure";
-        }
-        if (values.find("CalculateNativeWinOcclusion") == size_t(-1))
-        {
-            values += ",CalculateNativeWinOcclusion";
-        }
-
-        command_line->AppendSwitchWithValue("disable-features", values);
         // for unsafe domain, add domain to whitelist
 		if (!m_strFilterDomain.empty())
 		{

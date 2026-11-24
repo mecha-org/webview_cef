@@ -46,6 +46,8 @@ add_library(${PLUGIN_NAME} SHARED
   "${CMAKE_CURRENT_SOURCE_DIR}/../common/webview_js_handler.h"
   "${CMAKE_CURRENT_SOURCE_DIR}/../common/webview_cookieVisitor.cc"
   "${CMAKE_CURRENT_SOURCE_DIR}/../common/webview_cookieVisitor.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../common/webview_dmabuf_reader.cc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../common/webview_dmabuf_reader.h"
 )
 
 apply_standard_settings(${PLUGIN_NAME})
