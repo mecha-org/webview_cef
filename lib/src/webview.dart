@@ -48,6 +48,9 @@ class WebViewController extends ValueNotifier<bool> {
   Future<void> get ready => _creatingCompleter?.future ?? Future<void>.value();
   bool _isDisposed = false;
   bool _focusEditable = false;
+  // Keyboard hint of the focused field ("url", "email", ...), kept so the
+  // keyboard reopens with the same type when the webview regains focus.
+  String _focusInputHint = '';
 
   final int _index;
   late int _browserId;
@@ -388,7 +391,7 @@ class WebViewController extends ValueNotifier<bool> {
 
   Function(String)? _onToolTip;
   Function(int)? _onCursorChanged;
-  Function(bool editable)? _onFocusedNodeChangeMessage;
+  Function(bool editable, String inputHint)? _onFocusedNodeChangeMessage;
   Function(int, int, int)? _onImeCompositionRangeChangedMessage;
 }
 
@@ -531,11 +534,12 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
   @override
   void initState() {
     super.initState();
-    _controller._onFocusedNodeChangeMessage = (editable) {
+    _controller._onFocusedNodeChangeMessage = (editable, inputHint) {
       _composingText = '';
       currentTextEditingValue = const TextEditingValue();
+      _controller._focusInputHint = inputHint;
       if (editable) {
-        attachTextInputClient();
+        attachTextInputClient(inputHint: inputHint);
         _controller.setClientFocus(true);
       } else {
         detachTextInputClient();
@@ -706,7 +710,7 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
         if (focused) {
           _controller.setClientFocus(true);
           if (_controller._focusEditable) {
-            attachTextInputClient();
+            attachTextInputClient(inputHint: _controller._focusInputHint);
           }
         } else {
           _controller.setClientFocus(false);
