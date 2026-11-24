@@ -332,6 +332,17 @@ class WebviewManager extends ValueNotifier<bool> {
         'respondPermissionPrompt', [request.requestId, result.index]);
   }
 
+  /// Overrides the decision Chromium stored for [origin]. Chromium remembers
+  /// accepted and denied prompts and stops asking, so call this whenever the
+  /// app changes or resets a site's permission. Private tabs are unaffected:
+  /// their decisions live only in memory.
+  Future<void> setPermissionSetting(String origin, StoredPermission permission,
+      StoredPermissionValue value) async {
+    assert(this.value);
+    await pluginChannel.invokeMethod<bool>(
+        'setPermissionSetting', [origin, permission.name, value.index]);
+  }
+
   Future<void> continueDownload(int downloadId, String downloadPath,
       {bool showDialog = false}) async {
     assert(value);

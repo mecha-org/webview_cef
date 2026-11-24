@@ -34,6 +34,18 @@ class PromptPermission {
   static const int sensors = 1 << 28;
 }
 
+/// Permissions whose decision Chromium remembers in the profile, for
+/// [WebviewManager.setPermissionSetting]. The name crosses the channel.
+enum StoredPermission { notifications, geolocation, clipboard, midi }
+
+/// Mirrors `cef_content_setting_values_t` (first three values).
+enum StoredPermissionValue {
+  /// No stored decision: the site will be asked again.
+  ask,
+  allow,
+  block,
+}
+
 /// Mirrors `cef_permission_request_result_t`.
 enum PermissionPromptResult { accept, deny, dismiss, ignore }
 

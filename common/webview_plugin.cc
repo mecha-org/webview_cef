@@ -779,6 +779,15 @@ namespace webview_cef {
 			m_handler->respondMediaAccess(requestId, allowed);
 			result(1, nullptr);
 		}
+		else if (name.compare("setPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			int settingValue = int(webview_value_get_int(webview_value_get_list_value(values, 2)));
+			bool ok = m_handler->setPermissionSetting(origin ? origin : "", kind ? kind : "", settingValue);
+			WValue *ret = webview_value_new_bool(ok);
+			result(1, ret);
+			webview_value_unref(ret);
+		}
 		else if (name.compare("respondPermissionPrompt") == 0) {
 			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
 			int permissionResult = int(webview_value_get_int(webview_value_get_list_value(values, 1)));

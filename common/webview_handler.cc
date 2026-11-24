@@ -428,6 +428,44 @@ void WebviewHandler::respondPermissionPrompt(uint64_t requestId, int result) {
     callback->Continue(static_cast<cef_permission_request_result_t>(result));
 }
 
+namespace {
+// Names shared with Dart; CEF's content-setting enum is positional and may
+// shift between CEF versions, so it never crosses the channel as a number.
+bool contentSettingTypeFor(const std::string& kind, cef_content_setting_types_t* type) {
+    if (kind == "notifications") *type = CEF_CONTENT_SETTING_TYPE_NOTIFICATIONS;
+    else if (kind == "geolocation") *type = CEF_CONTENT_SETTING_TYPE_GEOLOCATION;
+    else if (kind == "clipboard") *type = CEF_CONTENT_SETTING_TYPE_CLIPBOARD_READ_WRITE;
+    else if (kind == "midi") *type = CEF_CONTENT_SETTING_TYPE_MIDI_SYSEX;
+    else return false;
+    return true;
+}
+}  // namespace
+
+// Chromium remembers accepted/denied prompts in the profile and stops asking,
+// so a decision changed or reset in the host's site settings must be written
+// here too. Only the global (persistent) context matters: private browsers use
+// an in-memory context that is discarded on exit.
+bool WebviewHandler::setPermissionSetting(const std::string& origin, const std::string& kind, int value) {
+    cef_content_setting_types_t type;
+    if (!contentSettingTypeFor(kind, &type) || origin.empty()) {
+        return false;
+    }
+    if (value != CEF_CONTENT_SETTING_VALUE_ALLOW && value != CEF_CONTENT_SETTING_VALUE_BLOCK) {
+        value = CEF_CONTENT_SETTING_VALUE_DEFAULT;
+    }
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(
+            base::IgnoreResult(&WebviewHandler::setPermissionSetting), this, origin, kind, value));
+        return true;
+    }
+    CefRefPtr<CefRequestContext> context = CefRequestContext::GetGlobalContext();
+    if (context) {
+        context->SetContentSetting(origin, origin, type,
+                                   static_cast<cef_content_setting_values_t>(value));
+    }
+    return true;
+}
+
 void WebviewHandler::CloseAllBrowsers(bool force_close) {
     if (browser_map_.empty()){
         return;

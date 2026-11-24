@@ -208,6 +208,13 @@ public:
     // |result| is a cef_permission_request_result_t.
     void respondPermissionPrompt(uint64_t requestId, int result);
 
+    // Overrides the decision Chromium stored for |origin| in the persistent
+    // profile. |kind| is "notifications", "geolocation", "clipboard" or "midi";
+    // |value| is a cef_content_setting_values_t (0 = default/ask again,
+    // 1 = allow, 2 = block). Returns false for an unknown |kind|. Safe to call
+    // from any thread.
+    bool setPermissionSetting(const std::string& origin, const std::string& kind, int value);
+
     // Download action methods:
     void continueDownload(uint32_t downloadId, const std::string& downloadPath, bool showDialog);
     void cancelDownload(uint32_t downloadId);
