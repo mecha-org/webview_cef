@@ -343,6 +343,21 @@ class WebviewManager extends ValueNotifier<bool> {
         'setPermissionSetting', [origin, permission.name, value.index]);
   }
 
+  /// The decision stored for [origin] in the persistent profile, or null if
+  /// none is stored. Private tabs use it to inherit blocks: their own profile
+  /// starts empty.
+  Future<StoredPermissionValue?> getPermissionSetting(
+      String origin, StoredPermission permission) async {
+    assert(value);
+    final raw = await pluginChannel.invokeMethod<int>(
+        'getPermissionSetting', [origin, permission.name]);
+    return switch (raw) {
+      1 => StoredPermissionValue.allow,
+      2 => StoredPermissionValue.block,
+      _ => null,
+    };
+  }
+
   Future<void> continueDownload(int downloadId, String downloadPath,
       {bool showDialog = false}) async {
     assert(value);

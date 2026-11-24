@@ -788,6 +788,15 @@ namespace webview_cef {
 			result(1, ret);
 			webview_value_unref(ret);
 		}
+		else if (name.compare("getPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			m_handler->getPermissionSetting(origin ? origin : "", kind ? kind : "", [=](int settingValue) {
+				WValue *ret = webview_value_new_int(settingValue);
+				result(1, ret);
+				webview_value_unref(ret);
+			});
+		}
 		else if (name.compare("respondPermissionPrompt") == 0) {
 			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
 			int permissionResult = int(webview_value_get_int(webview_value_get_list_value(values, 1)));

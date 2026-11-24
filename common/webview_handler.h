@@ -214,6 +214,10 @@ public:
     // 1 = allow, 2 = block). Returns false for an unknown |kind|. Safe to call
     // from any thread.
     bool setPermissionSetting(const std::string& origin, const std::string& kind, int value);
+    // Reads the decision stored for |origin| in the persistent profile and
+    // passes it to |callback| on the UI thread: a cef_content_setting_values_t
+    // (0 = none stored, 1 = allow, 2 = block), or -1 for an unknown |kind|.
+    void getPermissionSetting(const std::string& origin, const std::string& kind, std::function<void(int)> callback);
 
     // Download action methods:
     void continueDownload(uint32_t downloadId, const std::string& downloadPath, bool showDialog);

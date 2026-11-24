@@ -466,6 +466,21 @@ bool WebviewHandler::setPermissionSetting(const std::string& origin, const std::
     return true;
 }
 
+void WebviewHandler::getPermissionSetting(const std::string& origin, const std::string& kind, std::function<void(int)> callback) {
+    cef_content_setting_types_t type;
+    if (!contentSettingTypeFor(kind, &type) || origin.empty()) {
+        callback(-1);
+        return;
+    }
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::getPermissionSetting, this, origin, kind, callback));
+        return;
+    }
+    CefRefPtr<CefRequestContext> context = CefRequestContext::GetGlobalContext();
+    callback(context ? static_cast<int>(context->GetContentSetting(origin, origin, type))
+                     : CEF_CONTENT_SETTING_VALUE_DEFAULT);
+}
+
 void WebviewHandler::CloseAllBrowsers(bool force_close) {
     if (browser_map_.empty()){
         return;
