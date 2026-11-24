@@ -10,8 +10,6 @@
 #include <chrono>
 #include <unordered_map>
 #include <cstdint>
-#include <png.h>
-#include <zlib.h>
 
 #include "include/base/cef_callback.h"
 #include "include/cef_app.h"
@@ -871,19 +869,6 @@ void WebviewHandler::executeJavaScript(int browserId, const std::string code, st
     }
 }
 
-void WebviewHandler::captureScreenshot(int browserId)
-{
-    auto it = browser_map_.find(browserId);
-    if (it != browser_map_.end() && it->second.browser.get()) {
-        it->second.capture_requested = true;
-        
-        // --- PROACTIVE FIX: Check if we already have a buffer to capture from.
-        // OnPaint is only called when something changes. If the page is static,
-        // it might not be called for a while.
-        it->second.browser->GetHost()->Invalidate(PET_VIEW);
-    }
-}
-
 void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) {
     CEF_REQUIRE_UI_THREAD();
     auto it = browser_map_.find(browser->GetIdentifier());
@@ -911,11 +896,6 @@ bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo&
     return false;
 }
 
-void write_to_vector(png_structp png_ptr, png_bytep data, png_size_t length) {
-    auto* buf = static_cast<std::vector<unsigned char>*>(png_get_io_ptr(png_ptr));
-    buf->insert(buf->end(), data, data + length);
-}
-
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
                              const CefRenderHandler::RectList &dirtyRects, const void *buffer, int w, int h)
 {
@@ -930,90 +910,6 @@ void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::Pa
         auto it = browser_map_.find(browserId);
         if (it != browser_map_.end())
         {
-            if (it->second.capture_requested)
-            {
-                it->second.capture_requested = false;
-
-                // --- Resize + BGRA->RGB pack happens HERE, on the UI/paint thread,
-                // directly from the live `buffer` — no full-frame copy first.
-                int target_h = h;
-                int target_w = w;
-                int scale = 1;
-                if (h > 480)
-                {
-                    scale = (h + 479) / 480;
-                    target_h = h / scale;
-                    target_w = w / scale;
-                }
-
-                auto small = std::make_shared<std::vector<unsigned char>>(
-                    (size_t)target_w * target_h * 3);
-
-                const unsigned char *src = static_cast<const unsigned char *>(buffer);
-                unsigned char *dst = small->data();
-
-                for (int y = 0; y < target_h; y++)
-                {
-                    int src_y = y * scale;
-                    for (int x = 0; x < target_w; x++)
-                    {
-                        int src_x = x * scale;
-                        int srcIdx = (src_y * w + src_x) * 4; // BGRA
-                        int dstIdx = (y * target_w + x) * 3;
-                        dst[dstIdx + 0] = src[srcIdx + 2]; // R
-                        dst[dstIdx + 1] = src[srcIdx + 1]; // G
-                        dst[dstIdx + 2] = src[srcIdx + 0]; // B
-                    }
-                }
-
-                // Background thread encodes to memory and invokes the Dart callback
-                std::thread([small, browserId, target_w, target_h, cb = onCaptureCompleteCallback]()
-                            {
-                    std::vector<unsigned char> pngBuf;
-                    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-                    if (!png_ptr) {
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    png_infop info_ptr = png_create_info_struct(png_ptr);
-                    if (!info_ptr) {
-                        png_destroy_write_struct(&png_ptr, NULL);
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    if (setjmp(png_jmpbuf(png_ptr))) {
-                        png_destroy_write_struct(&png_ptr, &info_ptr);
-                        if (cb) cb(browserId, false, nullptr, 0);
-                        return;
-                    }
-
-                    png_set_write_fn(png_ptr, &pngBuf, write_to_vector, NULL);
-                    png_set_IHDR(png_ptr, info_ptr, target_w, target_h,
-                                 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-
-                    png_set_compression_level(png_ptr, 6);
-                    png_set_compression_strategy(png_ptr, Z_RLE);
-                    png_set_filter(png_ptr, 0, PNG_FILTER_SUB);
-
-                    png_write_info(png_ptr, info_ptr);
-
-                    const unsigned char* px = small->data();
-                    for (int y = 0; y < target_h; y++) {
-                        png_write_row(png_ptr, const_cast<png_bytep>(px + (size_t)y * target_w * 3));
-                    }
-
-                    png_write_end(png_ptr, NULL);
-                    
-                    if (cb) {
-                        cb(browserId, true, pngBuf.data(), pngBuf.size());
-                    }
-
-                    png_destroy_write_struct(&png_ptr, &info_ptr);
-                }).detach();
-            }
             it->second.width = w;
             it->second.height = h;
         }

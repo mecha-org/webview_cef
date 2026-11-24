@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,14 +6,6 @@ import 'package:flutter/widgets.dart';
 import 'package:webview_cef/src/webview_inject_user_script.dart';
 
 import 'webview.dart';
-
-import 'dart:ffi';
-
-
-typedef CaptureCompleteCallbackNative = Void Function(
-    Int32 browserId, Bool success, Pointer<Uint8> data, IntPtr size);
-typedef CaptureCompleteCallbackDart = void Function(
-    int browserId, bool success, Pointer<Uint8> data, int size);
 
 class WebviewManager extends ValueNotifier<bool> {
   static final WebviewManager _instance = WebviewManager._internal();
@@ -34,50 +25,6 @@ class WebviewManager extends ValueNotifier<bool> {
   int nextIndex = 1;
 
   bool? _hasNativeKeySupport;
-
-  final Map<int, Completer<Uint8List?>> _pendingCaptures = {};
-
-  late final _captureCallback = NativeCallable<CaptureCompleteCallbackNative>.listener(_onCaptureComplete);
-
-  void _onCaptureComplete(int browserId, bool success, Pointer<Uint8> data, int size) {
-    final completer = _pendingCaptures.remove(browserId);
-    if (completer == null) return;
-    completer.complete(success ? data.asTypedList(size) : null);
-  }
-
-  void _registerCaptureCallback() {
-    try {
-      String libName = 'libwebview_cef_plugin.so';
-      if (Platform.isWindows) libName = 'webview_cef_plugin.dll';
-      if (Platform.isMacOS) libName = 'webview_cef_plugin.framework/webview_cef_plugin';
-
-      final DynamicLibrary lib = DynamicLibrary.open(libName);
-      final void Function(Pointer<NativeFunction<CaptureCompleteCallbackNative>>)
-          setCallback = lib.lookupFunction<
-                  Void Function(
-                      Pointer<NativeFunction<CaptureCompleteCallbackNative>>),
-                  void Function(
-                      Pointer<NativeFunction<CaptureCompleteCallbackNative>>)>('webview_cef_set_capture_complete_callback');
-      setCallback(_captureCallback.nativeFunction);
-    } catch (e) {
-      debugPrint('Failed to register capture callback: $e');
-    }
-  }
-
-  Future<Uint8List?> captureScreenshot(int browserId) async {
-    final completer = Completer<Uint8List?>();
-    _pendingCaptures[browserId] = completer;
-
-    await pluginChannel.invokeMethod('captureScreenshot', [browserId, '']);
-
-    return completer.future.timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {
-        _pendingCaptures.remove(browserId);
-        return null;
-      },
-    );
-  }
 
   Future<void> get ready {
     final completer = _creatingCompleter;
@@ -130,7 +77,6 @@ class WebviewManager extends ValueNotifier<bool> {
         await pluginChannel.invokeMethod('init');
       }
       pluginChannel.setMethodCallHandler(methodCallhandler);
-      _registerCaptureCallback();
       // Wait for the platform to complete initialization.
       await Future.delayed(const Duration(milliseconds: 300));
       creatingCompleter.complete();

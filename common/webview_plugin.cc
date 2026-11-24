@@ -18,7 +18,6 @@ namespace webview_cef {
 	CefString userAgent;
 	bool isCefInitialized = false;
 
-	static WebviewPlugin* g_plugin_for_ffi = nullptr;
 #ifdef OS_MAC
 	std::string g_macSubprocessPath;
 	std::string g_macFrameworkDirPath;
@@ -35,11 +34,9 @@ namespace webview_cef {
 
     WebviewPlugin::WebviewPlugin() {
 		m_handler = new WebviewHandler();
-		g_plugin_for_ffi = this;
 	}
 
     WebviewPlugin::~WebviewPlugin() {
-		if (g_plugin_for_ffi == this) g_plugin_for_ffi = nullptr;
 		uninitCallback();
 		m_handler->CloseAllBrowsers(true);
 		m_handler = nullptr;
@@ -759,11 +756,6 @@ namespace webview_cef {
 			m_handler->resumeDownload(downloadId);
 			result(1, nullptr);
 		}
-		else if (name.compare("captureScreenshot") == 0) {
-			int browserId = int(webview_value_get_int(webview_value_get_list_value(values, 0)));
-			m_handler->captureScreenshot(browserId);
-			result(1, nullptr);
-		}
 		else {
 			result = 0;
 		}
@@ -845,12 +837,6 @@ namespace webview_cef {
 		auto it = m_renderers.find(browserId);
 		if(it != m_renderers.end() && it->second){
 			it->second->composing = composing;
-		}
-	}
-
-	void WebviewPlugin::setCaptureCompleteCallback(CaptureCompleteCallback callback) {
-		if (m_handler) {
-			m_handler->onCaptureCompleteCallback = callback;
 		}
 	}
 
@@ -971,12 +957,4 @@ namespace webview_cef {
 		CefShutdown();
 		std::cerr << "[webview_cef] CefShutdown: complete" << std::endl;
 	}
-}
-
-extern "C" {
-    FLUTTER_PLUGIN_EXPORT void webview_cef_set_capture_complete_callback(CaptureCompleteCallback callback) {
-        if (webview_cef::g_plugin_for_ffi) {
-            webview_cef::g_plugin_for_ffi->setCaptureCompleteCallback(callback);
-        }
-    }
 }

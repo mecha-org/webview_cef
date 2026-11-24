@@ -26,8 +26,6 @@ endif()
 set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../third/cef")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
-find_package(PNG REQUIRED)
-find_package(ZLIB REQUIRED)
 
 set(PLUGIN_NAME "webview_cef_plugin")
 
