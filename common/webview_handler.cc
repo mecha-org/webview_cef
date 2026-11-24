@@ -1067,7 +1067,7 @@ void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRender
 #if defined(OS_LINUX)
         if (onAcceleratedPaintInfoCallback != nullptr)
         {
-            onAcceleratedPaintInfoCallback(browser->GetIdentifier(), info, w, h);
+            onAcceleratedPaintInfoCallback(browser->GetIdentifier(), info, dirtyRects, w, h);
         }
 #endif
     }
