@@ -134,16 +134,74 @@ class WebViewController extends ValueNotifier<bool> {
   }
 
   /// Long-press text selection on the page (handles and quick menu).
-  final WebTouchSelection touchSelection = WebTouchSelection();
+  late final WebTouchSelection touchSelection =
+      WebTouchSelection(isEditable: () => _focusEditable);
 
   /// Runs [action] on the current long-press selection.
+  ///
+  /// Chromium's clipboard is separate from the app's, so copy and cut also
+  /// put the text on the app clipboard, and paste inserts the app clipboard
+  /// (falling back to Chromium's paste when it holds no text).
   Future<void> quickMenuAction(QuickMenuAction action) async {
     if (_isDisposed) {
       return;
     }
     assert(value);
+    if (action == QuickMenuAction.copy || action == QuickMenuAction.cut) {
+      // Before Chromium acts: a cut removes the selection.
+      await _copySelectionToAppClipboard();
+    }
+    if (action == QuickMenuAction.paste) {
+      final text = await _appClipboardText();
+      if (text != null) {
+        await _pluginChannel.invokeMethod(
+            'quickMenuAction', [_browserId, QuickMenuAction.dismiss.index]);
+        return imeCommitText(text);
+      }
+    }
     return _pluginChannel
         .invokeMethod('quickMenuAction', [_browserId, action.index]);
+  }
+
+  /// The page's selected text: the focused field's selection, else the
+  /// document selection (following focus into same-origin frames). Password
+  /// fields give nothing, as in Chrome.
+  static const _selectedTextScript = '''(() => {
+  let doc = document;
+  for (;;) {
+    const f = doc.activeElement;
+    if (!f || (f.tagName !== 'IFRAME' && f.tagName !== 'FRAME')) break;
+    try { if (!f.contentDocument) break; doc = f.contentDocument; } catch (_) { break; }
+  }
+  const e = doc.activeElement;
+  if (e && (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA')) {
+    if (e.type === 'password') return '';
+    try {
+      if (e.selectionStart != null && e.selectionEnd != null) {
+        return e.value.substring(e.selectionStart, e.selectionEnd);
+      }
+    } catch (_) {}
+  }
+  const s = doc.getSelection();
+  return s ? s.toString() : '';
+})()''';
+
+  /// Puts the page's selected text on the app clipboard, if there is any.
+  Future<void> _copySelectionToAppClipboard() async {
+    try {
+      final text = await evaluateJavascript(_selectedTextScript);
+      if (text is String && text.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: text));
+      }
+    } catch (_) {
+      // A page that blocks scripts keeps Chromium's own copy.
+    }
+  }
+
+  /// The app clipboard's text, or null if it has none.
+  Future<String?> _appClipboardText() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    return text == null || text.isEmpty ? null : text;
   }
 
   /// Height of app UI drawn over the bottom of the webview while the
@@ -486,7 +544,8 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     // However, since we're using a fake TextEditingValue just to track diffs in onVirtualEditingValue,
     // we can construct it from the deltas' resulting state if they provide it.
     if (textEditingDeltas.isNotEmpty) {
-      currentTextEditingValue = textEditingDeltas.last.apply(currentTextEditingValue ?? const TextEditingValue());
+      currentTextEditingValue = textEditingDeltas.last
+          .apply(currentTextEditingValue ?? const TextEditingValue());
     }
   }
 
@@ -636,11 +695,27 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     // Map Flutter key event to CEF key event
     final logicalKey = event.logicalKey;
     final character = event.character;
+    final keyboard = HardwareKeyboard.instance;
+    // Ctrl+letter is a shortcut (select all, copy, undo...), not text, even
+    // though the embedder still reports its character. Ctrl+Alt is left as
+    // text: some layouts type characters (e.g. '@') with it.
+    final isShortcut = keyboard.isControlPressed && !keyboard.isAltPressed;
+
+    if (isShortcut &&
+        (logicalKey == LogicalKeyboardKey.keyC ||
+            logicalKey == LogicalKeyboardKey.keyX ||
+            logicalKey == LogicalKeyboardKey.keyV)) {
+      // Down sends both down and up itself; repeats and the up are dropped.
+      if (event is KeyDownEvent) {
+        _clipboardShortcut(logicalKey, keyboard.isShiftPressed);
+      }
+      return KeyEventResult.handled;
+    }
 
     // 1. If the key event has a character, let the TextInputClient handle it.
     // This prevents doubling because updateEditingValueWithDeltas/onVirtualEditingValue
     // will be responsible for sending the text to CEF.
-    if (character != null && character.isNotEmpty) {
+    if (character != null && character.isNotEmpty && !isShortcut) {
       return KeyEventResult.ignored;
     }
 
@@ -686,6 +761,41 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     );
 
     return KeyEventResult.handled;
+  }
+
+  /// Ctrl+C / Ctrl+X / Ctrl+V in the page, through the app clipboard.
+  ///
+  /// Chromium's clipboard is separate from the app's (text copied in the
+  /// address bar couldn't be pasted into the page), so copy and cut also put
+  /// the selection on the app clipboard, and paste inserts the app clipboard
+  /// text. Chromium still runs its own copy and cut, and its own paste when
+  /// the app clipboard has no text.
+  Future<void> _clipboardShortcut(LogicalKeyboardKey key, bool shift) async {
+    void sendToPage() {
+      final keyCode = _logicalKeyToWindowsKeyCode(key);
+      final modifiers = eventFlagControlDown | (shift ? eventFlagShiftDown : 0);
+      _controller.sendKeyEvent(keyEventRawKeyDown, keyCode, modifiers, 0, 0);
+      _controller.sendKeyEvent(keyEventKeyUp, keyCode, modifiers, 0, 0);
+    }
+
+    if (key == LogicalKeyboardKey.keyV) {
+      final text = await _controller._appClipboardText();
+      if (!mounted) return;
+      if (text != null && _controller._focusEditable) {
+        await _controller.imeCommitText(text);
+      } else {
+        sendToPage();
+      }
+      return;
+    }
+    if (key == LogicalKeyboardKey.keyX) {
+      // Read the selection before the cut removes it.
+      await _controller._copySelectionToAppClipboard();
+      if (mounted) sendToPage();
+      return;
+    }
+    sendToPage();
+    await _controller._copySelectionToAppClipboard();
   }
 
   int _logicalKeyToWindowsKeyCode(LogicalKeyboardKey key) {
@@ -1032,7 +1142,6 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
 
   Size? _lastReportedSize;
   double? _lastReportedDpi;
-
 }
 
 class StaticWebView extends StatelessWidget {

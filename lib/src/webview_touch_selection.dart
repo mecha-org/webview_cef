@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Quick menu actions. The index is the action id sent to the native side
 /// (`quickMenuAction`), so keep the order in sync with webview_handler.cc.
@@ -41,14 +42,28 @@ class WebTouchHandle {
 /// Chromium does the selecting and the handle dragging; this only mirrors
 /// the state so it can be drawn.
 class WebTouchSelection extends ChangeNotifier {
+  WebTouchSelection({bool Function()? isEditable})
+      : _isEditable = isEditable ?? (() => false);
+
+  /// Whether the page's focused element takes text.
+  final bool Function() _isEditable;
+
   /// Selection rect to place the quick menu around, or null when hidden.
   Rect? menuRect;
   int menuFlags = 0;
   final Map<int, WebTouchHandle> handles = {};
 
+  /// Whether the app clipboard had text when the menu was last shown.
+  bool _appClipboardHasText = false;
+
   bool get canCut => menuFlags & _quickMenuCanCut != 0;
   bool get canCopy => menuFlags & _quickMenuCanCopy != 0;
-  bool get canPaste => menuFlags & _quickMenuCanPaste != 0;
+
+  /// Chromium only knows its own clipboard; paste also comes from the app
+  /// clipboard (see [WebViewController.quickMenuAction]).
+  bool get canPaste =>
+      menuFlags & _quickMenuCanPaste != 0 ||
+      (_appClipboardHasText && _isEditable());
 
   /// Whether a selection (handles or menu) is on screen.
   /// Handles scrolled off-screen stay enabled but invisible, so only
@@ -73,11 +88,22 @@ class WebTouchSelection extends ChangeNotifier {
         (args['height'] as int).toDouble(),
       );
       menuFlags = args['flags'] as int;
+      _checkAppClipboard();
     } else {
       menuRect = null;
       menuFlags = 0;
     }
     notifyListeners();
+  }
+
+  Future<void> _checkAppClipboard() async {
+    // Not Clipboard.hasStrings: the elinux embedder doesn't implement it.
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final hasText = data?.text?.isNotEmpty ?? false;
+    if (hasText != _appClipboardHasText) {
+      _appClipboardHasText = hasText;
+      if (menuRect != null) notifyListeners();
+    }
   }
 
   void onTouchHandle(Map<dynamic, dynamic> args) {
