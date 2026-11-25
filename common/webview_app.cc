@@ -4,6 +4,7 @@
 
 #include "webview_app.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -157,7 +158,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 
         // Features (Enable/Disable)
         command_line->AppendSwitchWithValue("disable-features", "EnableHangWatcher,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,CalculateNativeWinOcclusion,TranslateUI,MediaRouter,OptimizationGuideModelDownloading");
-        command_line->AppendSwitchWithValue("enable-features", "UseOzonePlatform");
+        command_line->AppendSwitchWithValue("enable-features", "UseOzonePlatform,WebRtcPipeWireCamera");
 
 		//http://www.chromium.org/developers/design-documents/process-models
 		if (m_uMode == 1)
@@ -350,8 +351,48 @@ void WebviewApp::OnUncaughtException(CefRefPtr<CefBrowser> browser, CefRefPtr<Ce
 {
 }
 
+namespace {
+
+// Keyboard hint for an editable element: "url", "email", "phone", "number",
+// "multiline" or "text". The page's inputmode attribute wins over the input
+// type, as in Chrome (e.g. <input type=text inputmode=numeric> for PINs).
+std::string inputHintForNode(CefRefPtr<CefDOMNode> node)
+{
+    std::string mode = node->GetElementAttribute("inputmode").ToString();
+    for (auto &c : mode)
+        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    if (mode == "url")
+        return "url";
+    if (mode == "email")
+        return "email";
+    if (mode == "tel")
+        return "phone";
+    if (mode == "numeric" || mode == "decimal")
+        return "number";
+
+    if (!node->IsFormControlElement())
+        return "multiline"; // contenteditable
+    switch (node->GetFormControlElementType())
+    {
+    case DOM_FORM_CONTROL_TYPE_INPUT_URL:
+        return "url";
+    case DOM_FORM_CONTROL_TYPE_INPUT_EMAIL:
+        return "email";
+    case DOM_FORM_CONTROL_TYPE_INPUT_TELEPHONE:
+        return "phone";
+    case DOM_FORM_CONTROL_TYPE_INPUT_NUMBER:
+        return "number";
+    case DOM_FORM_CONTROL_TYPE_TEXT_AREA:
+        return "multiline";
+    default:
+        return "text";
+    }
+}
+
+} // namespace
+
 void WebviewApp::OnFocusedNodeChanged(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefDOMNode> node)
- {    
+ {
     //Get node attribute
     bool is_editable = (node.get() && node->IsEditable());
     CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create(kFocusedNodeChangedMessage);
@@ -362,6 +403,8 @@ void WebviewApp::OnFocusedNodeChanged(CefRefPtr<CefBrowser> browser, CefRefPtr<C
         message->GetArgumentList()->SetInt(1, rect.x);
         message->GetArgumentList()->SetInt(2, rect.y + rect.height);
         message->GetArgumentList()->SetInt(3, rect.height);
+        // Keyboard hint for the on-screen keyboard (url, email, phone, ...).
+        message->GetArgumentList()->SetString(4, inputHintForNode(node));
     }
     frame->SendProcessMessage(PID_BROWSER, message);
 }

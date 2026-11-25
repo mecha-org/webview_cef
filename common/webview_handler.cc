@@ -59,8 +59,13 @@ bool WebviewHandler::OnProcessMessageReceived(
     if (message_name == kFocusedNodeChangedMessage)
     {
         current_focused_browser_ = browser;
-        bool editable = message->GetArgumentList()->GetBool(0);
-        onFocusedNodeChangeMessage(browser->GetIdentifier(), editable);
+        CefRefPtr<CefListValue> args = message->GetArgumentList();
+        bool editable = args->GetBool(0);
+        std::string inputHint;
+        if (editable && args->GetSize() > 4) {
+            inputHint = args->GetString(4).ToString();
+        }
+        onFocusedNodeChangeMessage(browser->GetIdentifier(), editable, inputHint);
         if (editable) {
             onImeCompositionRangeChangedMessage(browser->GetIdentifier(), message->GetArgumentList()->GetInt(1), message->GetArgumentList()->GetInt(2), message->GetArgumentList()->GetInt(3));
         }
@@ -156,6 +161,21 @@ bool WebviewHandler::DoClose(CefRefPtr<CefBrowser> browser) {
 
 void WebviewHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
     CEF_REQUIRE_UI_THREAD();
+    // Drop any media request still waiting on the host. Releasing the callback
+    // without calling Continue cancels the request. Permission prompts are
+    // dismissed by CEF itself (OnDismissPermissionPrompt).
+    const int browserId = browser->GetIdentifier();
+    for (auto it = media_access_callbacks_.begin(); it != media_access_callbacks_.end();) {
+        if (it->second.browserId == browserId) {
+            const uint64_t requestId = it->first;
+            it = media_access_callbacks_.erase(it);
+            if (onPermissionDismissedEvent) {
+                onPermissionDismissedEvent(browserId, requestId, true);
+            }
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -323,6 +343,147 @@ void WebviewHandler::resumeDownload(uint32_t downloadId) {
     }
 }
 
+bool WebviewHandler::OnRequestMediaAccessPermission(CefRefPtr<CefBrowser> browser,
+                                                    CefRefPtr<CefFrame> frame,
+                                                    const CefString& requesting_origin,
+                                                    uint32_t requested_permissions,
+                                                    CefRefPtr<CefMediaAccessCallback> callback) {
+    CEF_REQUIRE_UI_THREAD();
+    if (!onPermissionRequestEvent || requested_permissions == CEF_MEDIA_PERMISSION_NONE) {
+        // No host UI to ask: deny rather than fall back to CEF's default.
+        callback->Cancel();
+        return true;
+    }
+    const uint64_t requestId = next_media_request_id_++;
+    const int browserId = browser->GetIdentifier();
+    media_access_callbacks_[requestId] = {browserId, requested_permissions, callback};
+    onPermissionRequestEvent(browserId, requestId, true, requesting_origin.ToString(), requested_permissions);
+    return true;
+}
+
+bool WebviewHandler::OnShowPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                            uint64_t prompt_id,
+                                            const CefString& requesting_origin,
+                                            uint32_t requested_permissions,
+                                            CefRefPtr<CefPermissionPromptCallback> callback) {
+    CEF_REQUIRE_UI_THREAD();
+    if (!onPermissionRequestEvent) {
+        return false; // Alloy default: CEF_PERMISSION_RESULT_IGNORE.
+    }
+    const int browserId = browser->GetIdentifier();
+    permission_prompt_callbacks_[prompt_id] = {browserId, callback};
+    onPermissionRequestEvent(browserId, prompt_id, false, requesting_origin.ToString(), requested_permissions);
+    return true;
+}
+
+void WebviewHandler::OnDismissPermissionPrompt(CefRefPtr<CefBrowser> browser,
+                                               uint64_t prompt_id,
+                                               cef_permission_request_result_t result) {
+    CEF_REQUIRE_UI_THREAD();
+    // Also fires after our own Continue(); only report prompts the host never
+    // answered (navigation, browser closed, ...).
+    auto it = permission_prompt_callbacks_.find(prompt_id);
+    if (it == permission_prompt_callbacks_.end()) {
+        return;
+    }
+    permission_prompt_callbacks_.erase(it);
+    if (onPermissionDismissedEvent) {
+        onPermissionDismissedEvent(browser->GetIdentifier(), prompt_id, false);
+    }
+}
+
+void WebviewHandler::respondMediaAccess(uint64_t requestId, uint32_t allowedPermissions) {
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::respondMediaAccess, this, requestId, allowedPermissions));
+        return;
+    }
+    auto it = media_access_callbacks_.find(requestId);
+    if (it == media_access_callbacks_.end()) {
+        return;
+    }
+    PendingMediaAccess pending = it->second;
+    media_access_callbacks_.erase(it);
+    // CEF requires the allowed mask to equal the requested mask; anything else
+    // is treated as a denial.
+    if (allowedPermissions != 0 && allowedPermissions == pending.requested) {
+        pending.callback->Continue(allowedPermissions);
+    } else {
+        pending.callback->Cancel();
+    }
+}
+
+void WebviewHandler::respondPermissionPrompt(uint64_t requestId, int result) {
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::respondPermissionPrompt, this, requestId, result));
+        return;
+    }
+    auto it = permission_prompt_callbacks_.find(requestId);
+    if (it == permission_prompt_callbacks_.end()) {
+        return;
+    }
+    CefRefPtr<CefPermissionPromptCallback> callback = it->second.callback;
+    // Erase first so the OnDismissPermissionPrompt that follows Continue() is
+    // not reported back to the host as an unanswered dismissal.
+    permission_prompt_callbacks_.erase(it);
+    if (result < CEF_PERMISSION_RESULT_ACCEPT || result >= CEF_PERMISSION_RESULT_NUM_VALUES) {
+        result = CEF_PERMISSION_RESULT_DENY;
+    }
+    callback->Continue(static_cast<cef_permission_request_result_t>(result));
+}
+
+namespace {
+// Names shared with Dart; CEF's content-setting enum is positional and may
+// shift between CEF versions, so it never crosses the channel as a number.
+bool contentSettingTypeFor(const std::string& kind, cef_content_setting_types_t* type) {
+    if (kind == "notifications") *type = CEF_CONTENT_SETTING_TYPE_NOTIFICATIONS;
+    else if (kind == "geolocation") *type = CEF_CONTENT_SETTING_TYPE_GEOLOCATION;
+    else if (kind == "clipboard") *type = CEF_CONTENT_SETTING_TYPE_CLIPBOARD_READ_WRITE;
+    else if (kind == "midi") *type = CEF_CONTENT_SETTING_TYPE_MIDI_SYSEX;
+    else return false;
+    return true;
+}
+}  // namespace
+
+// Chromium remembers accepted/denied prompts in the profile and stops asking,
+// so a decision changed or reset in the host's site settings must be written
+// here too. Only the global (persistent) context matters: private browsers use
+// an in-memory context that is discarded on exit.
+bool WebviewHandler::setPermissionSetting(const std::string& origin, const std::string& kind, int value) {
+    cef_content_setting_types_t type;
+    if (!contentSettingTypeFor(kind, &type) || origin.empty()) {
+        return false;
+    }
+    if (value != CEF_CONTENT_SETTING_VALUE_ALLOW && value != CEF_CONTENT_SETTING_VALUE_BLOCK) {
+        value = CEF_CONTENT_SETTING_VALUE_DEFAULT;
+    }
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(
+            base::IgnoreResult(&WebviewHandler::setPermissionSetting), this, origin, kind, value));
+        return true;
+    }
+    CefRefPtr<CefRequestContext> context = CefRequestContext::GetGlobalContext();
+    if (context) {
+        context->SetContentSetting(origin, origin, type,
+                                   static_cast<cef_content_setting_values_t>(value));
+    }
+    return true;
+}
+
+void WebviewHandler::getPermissionSetting(const std::string& origin, const std::string& kind, std::function<void(int)> callback) {
+    cef_content_setting_types_t type;
+    if (!contentSettingTypeFor(kind, &type) || origin.empty()) {
+        callback(-1);
+        return;
+    }
+    if (!CefCurrentlyOn(TID_UI)) {
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::getPermissionSetting, this, origin, kind, callback));
+        return;
+    }
+    CefRefPtr<CefRequestContext> context = CefRequestContext::GetGlobalContext();
+    callback(context ? static_cast<int>(context->GetContentSetting(origin, origin, type))
+                     : CEF_CONTENT_SETTING_VALUE_DEFAULT);
+}
+
 void WebviewHandler::CloseAllBrowsers(bool force_close) {
     if (browser_map_.empty()){
         return;
@@ -457,9 +618,14 @@ void WebviewHandler::changeSize(int browserId, float a_dpi, int w, int h)
 {
     auto it = browser_map_.find(browserId);
     if (it != browser_map_.end()) {
+        const bool scaleChanged = it->second.dpi != a_dpi;
         it->second.dpi = a_dpi;
         it->second.width = w;
         it->second.height = h;
+        if (scaleChanged) {
+            // Re-query GetScreenInfo; WasResized alone keeps the old scale.
+            it->second.browser->GetHost()->NotifyScreenInfoChanged();
+        }
         it->second.browser->GetHost()->WasResized();
     }
 }
@@ -891,9 +1057,15 @@ void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) {
 }
 
 bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) {
-    //todo: hi dpi support
-    screen_info.device_scale_factor  = browser_map_[browser->GetIdentifier()].dpi;
-    return false;
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it == browser_map_.end() || it->second.dpi <= 0.0f) {
+        return false;
+    }
+    // Must return true: CEF ignores |screen_info| otherwise and renders at a
+    // scale of 1.0, which Flutter then stretches to the physical size (blurry
+    // pages on any display whose device pixel ratio is above 1).
+    screen_info.device_scale_factor = it->second.dpi;
+    return true;
 }
 
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
@@ -963,4 +1135,94 @@ void WebviewHandler::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser, CefRender
 #endif
     }
 #endif
+}
+// ---------------------------------------------------------------------------
+// Touch selection (long press). selects the text, tracks the handles
+// and decides which edit actions are allowed; we only forward that state to
+// Dart, which draws the handles and the cut/copy/paste toolbar.
+// ---------------------------------------------------------------------------
+
+// Size Chromium uses to hit-test the touch handles; the Dart side draws them
+// at the same size.
+static constexpr int kTouchHandleSize = 32;
+
+// Actions from Dart (quickMenuAction). Keep in sync with webview.dart.
+enum QuickMenuAction {
+    kQuickMenuDismiss = 0,
+    kQuickMenuCut = 1,
+    kQuickMenuCopy = 2,
+    kQuickMenuPaste = 3,
+    kQuickMenuSelectAll = 4,
+};
+
+bool WebviewHandler::RunContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefContextMenuParams> params, CefRefPtr<CefMenuModel> model, CefRefPtr<CefRunContextMenuCallback> callback)
+{
+    // No context menu: a long press is handled as touch selection instead.
+    callback->Cancel();
+    return true;
+}
+
+bool WebviewHandler::RunQuickMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, const CefPoint& location, const CefSize& size, QuickMenuEditStateFlags edit_state_flags, CefRefPtr<CefRunQuickMenuCallback> callback)
+{
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it == browser_map_.end()) {
+        return false;
+    }
+    if (it->second.quick_menu_callback) {
+        it->second.quick_menu_callback->Cancel();
+    }
+    it->second.quick_menu_callback = callback;
+    if (onQuickMenuEvent) {
+        onQuickMenuEvent(browser->GetIdentifier(), true, location.x, location.y, size.width, size.height, edit_state_flags);
+    }
+    return true;
+}
+
+void WebviewHandler::OnQuickMenuDismissed(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame)
+{
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it != browser_map_.end()) {
+        it->second.quick_menu_callback = nullptr;
+    }
+    if (onQuickMenuEvent) {
+        onQuickMenuEvent(browser->GetIdentifier(), false, 0, 0, 0, 0, 0);
+    }
+}
+
+void WebviewHandler::GetTouchHandleSize(CefRefPtr<CefBrowser> browser, cef_horizontal_alignment_t orientation, CefSize& size)
+{
+    size = CefSize(kTouchHandleSize, kTouchHandleSize);
+}
+
+void WebviewHandler::OnTouchHandleStateChanged(CefRefPtr<CefBrowser> browser, const CefTouchHandleState& state)
+{
+    if (onTouchHandleEvent) {
+        onTouchHandleEvent(browser->GetIdentifier(), state.touch_handle_id, state.flags, state.enabled,
+                           state.orientation, state.origin.x, state.origin.y, state.alpha);
+    }
+}
+
+void WebviewHandler::quickMenuAction(int browserId, int action)
+{
+    auto it = browser_map_.find(browserId);
+    if (it == browser_map_.end()) {
+        return;
+    }
+    if (action == kQuickMenuSelectAll) {
+        // Not a quick menu command: select everything and let Chromium show a
+        // new quick menu for the new selection.
+        it->second.browser->GetFocusedFrame()->SelectAll();
+        return;
+    }
+    CefRefPtr<CefRunQuickMenuCallback> callback = it->second.quick_menu_callback;
+    if (!callback) {
+        return;
+    }
+    it->second.quick_menu_callback = nullptr;
+    switch (action) {
+        case kQuickMenuCut: callback->Continue(QM_EDITFLAG_CAN_CUT, EVENTFLAG_NONE); break;
+        case kQuickMenuCopy: callback->Continue(QM_EDITFLAG_CAN_COPY, EVENTFLAG_NONE); break;
+        case kQuickMenuPaste: callback->Continue(QM_EDITFLAG_CAN_PASTE, EVENTFLAG_NONE); break;
+        default: callback->Cancel(); break;
+    }
 }

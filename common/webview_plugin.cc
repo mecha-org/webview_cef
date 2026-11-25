@@ -178,7 +178,7 @@ namespace webview_cef {
 				}
 			};
 
-			m_handler->onFocusedNodeChangeMessage = [=, this](int nBrowserId, bool bEditable)
+			m_handler->onFocusedNodeChangeMessage = [=, this](int nBrowserId, bool bEditable, std::string inputHint)
 			{
 				// Track editable focus per browser so the platform layer can route
 				// raw character keys to the OS IME while a web input is focused
@@ -193,12 +193,15 @@ namespace webview_cef {
 				{
 					WValue* bId = webview_value_new_int(int64_t(nBrowserId));
 					WValue* editable = webview_value_new_bool(bEditable);
+					WValue* hint = webview_value_new_string(const_cast<char*>(inputHint.c_str()));
 					WValue* retMap = webview_value_new_map();
 					webview_value_set_string(retMap, "browserId", bId);
 					webview_value_set_string(retMap, "editable", editable);
+					webview_value_set_string(retMap, "inputHint", hint);
 					m_invokeFunc("onFocusedNodeChangeMessage", retMap);
 					webview_value_unref(bId);
 					webview_value_unref(editable);
+					webview_value_unref(hint);
 					webview_value_unref(retMap);
 				}
 			};
@@ -225,6 +228,49 @@ namespace webview_cef {
 				}
 			};
 
+
+			// Touch selection. Fields are sent as plain ints/doubles in a map.
+			auto sendSelectionEvent = [=, this](const char* method, std::initializer_list<std::pair<const char*, WValue*>> fields)
+			{
+				WValue* retMap = webview_value_new_map();
+				for (const auto& field : fields) {
+					webview_value_set_string(retMap, field.first, field.second);
+					webview_value_unref(field.second);
+				}
+				m_invokeFunc(method, retMap);
+				webview_value_unref(retMap);
+			};
+
+			m_handler->onQuickMenuEvent = [=, this](int nBrowserId, bool visible, int32_t x, int32_t y, int32_t width, int32_t height, int flags)
+			{
+				if (!m_invokeFunc)
+					return;
+				sendSelectionEvent("onQuickMenu", {
+					{"browserId", webview_value_new_int(nBrowserId)},
+					{"visible", webview_value_new_bool(visible)},
+					{"x", webview_value_new_int(x)},
+					{"y", webview_value_new_int(y)},
+					{"width", webview_value_new_int(width)},
+					{"height", webview_value_new_int(height)},
+					{"flags", webview_value_new_int(flags)},
+				});
+			};
+
+			m_handler->onTouchHandleEvent = [=, this](int nBrowserId, int handleId, int flags, bool enabled, int orientation, int32_t x, int32_t y, float alpha)
+			{
+				if (!m_invokeFunc)
+					return;
+				sendSelectionEvent("onTouchHandle", {
+					{"browserId", webview_value_new_int(nBrowserId)},
+					{"id", webview_value_new_int(handleId)},
+					{"flags", webview_value_new_int(flags)},
+					{"enabled", webview_value_new_bool(enabled)},
+					{"orientation", webview_value_new_int(orientation)},
+					{"x", webview_value_new_int(x)},
+					{"y", webview_value_new_int(y)},
+					{"alpha", webview_value_new_double(alpha)},
+				});
+			};
 
             m_handler->onLoadStart = [=, this](int nBrowserId, std::string urlId)
             {
@@ -314,6 +360,50 @@ namespace webview_cef {
                 }
             };
 
+            m_handler->onPermissionRequestEvent = [=, this](int nBrowserId, uint64_t requestId, bool isMedia, std::string origin, uint32_t permissions)
+            {
+                if (m_invokeFunc)
+                {
+                    WValue* bId = webview_value_new_int(nBrowserId);
+                    WValue* rId = webview_value_new_int(int64_t(requestId));
+                    WValue* wMedia = webview_value_new_bool(isMedia);
+                    WValue* wOrigin = webview_value_new_string(const_cast<char*>(origin.c_str()));
+                    WValue* wPerms = webview_value_new_int(int64_t(permissions));
+                    WValue* retMap = webview_value_new_map();
+                    webview_value_set_string(retMap, "browserId", bId);
+                    webview_value_set_string(retMap, "requestId", rId);
+                    webview_value_set_string(retMap, "isMedia", wMedia);
+                    webview_value_set_string(retMap, "origin", wOrigin);
+                    webview_value_set_string(retMap, "permissions", wPerms);
+                    m_invokeFunc("onPermissionRequest", retMap);
+                    webview_value_unref(bId);
+                    webview_value_unref(rId);
+                    webview_value_unref(wMedia);
+                    webview_value_unref(wOrigin);
+                    webview_value_unref(wPerms);
+                    webview_value_unref(retMap);
+                }
+            };
+
+            m_handler->onPermissionDismissedEvent = [=, this](int nBrowserId, uint64_t requestId, bool isMedia)
+            {
+                if (m_invokeFunc)
+                {
+                    WValue* bId = webview_value_new_int(nBrowserId);
+                    WValue* rId = webview_value_new_int(int64_t(requestId));
+                    WValue* wMedia = webview_value_new_bool(isMedia);
+                    WValue* retMap = webview_value_new_map();
+                    webview_value_set_string(retMap, "browserId", bId);
+                    webview_value_set_string(retMap, "requestId", rId);
+                    webview_value_set_string(retMap, "isMedia", wMedia);
+                    m_invokeFunc("onPermissionDismissed", retMap);
+                    webview_value_unref(bId);
+                    webview_value_unref(rId);
+                    webview_value_unref(wMedia);
+                    webview_value_unref(retMap);
+                }
+            };
+
             m_handler->onDownloadUpdatedEvent = [=, this](int nBrowserId, uint32_t downloadId, std::string url, std::string fullPath, int64_t receivedBytes, int64_t totalBytes, int64_t currentSpeed, int percentComplete, bool isInProgress, bool isComplete, bool isCanceled, bool isInterrupted, int interruptReason)
             {
                 if (m_invokeFunc)
@@ -389,6 +479,8 @@ namespace webview_cef {
 		m_handler->onLoadErrorEvent = nullptr;
 		m_handler->onBeforeDownloadEvent = nullptr;
 		m_handler->onDownloadUpdatedEvent = nullptr;
+		m_handler->onPermissionRequestEvent = nullptr;
+		m_handler->onPermissionDismissedEvent = nullptr;
 		m_init = false;
 	}
 
@@ -502,6 +594,12 @@ namespace webview_cef {
 		else if (name.compare("reload") == 0) {
 			int browserId = int(webview_value_get_int(values));
 			m_handler->reload(browserId);
+			result(1, nullptr);
+		}
+		else if (name.compare("quickMenuAction") == 0) {
+			int browserId = int(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			int action = int(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->quickMenuAction(browserId, action);
 			result(1, nullptr);
 		}
 		else if (name.compare("wasHidden") == 0)
@@ -722,6 +820,36 @@ namespace webview_cef {
 			const auto downloadPath = webview_value_get_string(webview_value_get_list_value(values, 1));
 			bool showDialog = webview_value_get_bool(webview_value_get_list_value(values, 2));
 			m_handler->continueDownload(downloadId, downloadPath ? downloadPath : "", showDialog);
+			result(1, nullptr);
+		}
+		else if (name.compare("respondMediaAccess") == 0) {
+			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			uint32_t allowed = uint32_t(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->respondMediaAccess(requestId, allowed);
+			result(1, nullptr);
+		}
+		else if (name.compare("setPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			int settingValue = int(webview_value_get_int(webview_value_get_list_value(values, 2)));
+			bool ok = m_handler->setPermissionSetting(origin ? origin : "", kind ? kind : "", settingValue);
+			WValue *ret = webview_value_new_bool(ok);
+			result(1, ret);
+			webview_value_unref(ret);
+		}
+		else if (name.compare("getPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			m_handler->getPermissionSetting(origin ? origin : "", kind ? kind : "", [=](int settingValue) {
+				WValue *ret = webview_value_new_int(settingValue);
+				result(1, ret);
+				webview_value_unref(ret);
+			});
+		}
+		else if (name.compare("respondPermissionPrompt") == 0) {
+			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			int permissionResult = int(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->respondPermissionPrompt(requestId, permissionResult);
 			result(1, nullptr);
 		}
 		else if (name.compare("cancelDownload") == 0) {

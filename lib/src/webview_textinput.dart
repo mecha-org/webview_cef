@@ -12,7 +12,10 @@ mixin WebeViewTextInput implements DeltaTextInputClient {
 
   TextInputConnection? _textInputConnection;
 
-  attachTextInputClient() {
+  /// Opens the keyboard for the focused web field. [inputHint] comes from the
+  /// renderer ("url", "email", "phone", "number", "multiline" or "text") and
+  /// picks the matching keyboard layout.
+  attachTextInputClient({String inputHint = ''}) {
     // On Windows the OS IME is driven by the native WM_IME pipeline (the Flutter
     // text-input/delta path does not deliver composition for an OSR browser on
     // Windows). Don't claim the IME here so the native path can own it.
@@ -21,14 +24,44 @@ mixin WebeViewTextInput implements DeltaTextInputClient {
     }
     _textInputConnection?.close();
     _textInputConnection = TextInput.attach(
-        this, const TextInputConfiguration(enableDeltaModel: true));
+        this,
+        TextInputConfiguration(
+          inputType: _inputTypeForHint(inputHint),
+          enableDeltaModel: true,
+        ));
     // show() makes this connection the active IME target so the OS IME composes
     // into it and the framework emits composing deltas we relay to CEF.
     _textInputConnection?.show();
   }
 
+  static TextInputType _inputTypeForHint(String inputHint) {
+    switch (inputHint) {
+      case 'url':
+        return TextInputType.url;
+      case 'email':
+        return TextInputType.emailAddress;
+      case 'phone':
+        return TextInputType.phone;
+      case 'number':
+        return TextInputType.number;
+      // 'multiline' (textarea, contenteditable) stays text on purpose: with
+      // TextInputType.multiline the embedder inserts "\n" on Enter *and* sends
+      // the action that onVirtualAction turns into an Enter key, so the page
+      // would get two line breaks.
+      default:
+        return TextInputType.text;
+    }
+  }
+
   detachTextInputClient() {
     _textInputConnection?.close();
+  }
+
+  /// Replaces the platform's editing state, e.g. to reset it after an edit
+  /// was forwarded to the page.
+  void setTextInputEditingValue(TextEditingValue value) {
+    currentTextEditingValue = value;
+    _textInputConnection?.setEditingState(value);
   }
 
   updateIMEComposionPosition(double x, double y, double height, Offset offset) {
