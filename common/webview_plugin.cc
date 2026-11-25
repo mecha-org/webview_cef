@@ -363,6 +363,50 @@ namespace webview_cef {
                 }
             };
 
+            m_handler->onPermissionRequestEvent = [=, this](int nBrowserId, uint64_t requestId, bool isMedia, std::string origin, uint32_t permissions)
+            {
+                if (m_invokeFunc)
+                {
+                    WValue* bId = webview_value_new_int(nBrowserId);
+                    WValue* rId = webview_value_new_int(int64_t(requestId));
+                    WValue* wMedia = webview_value_new_bool(isMedia);
+                    WValue* wOrigin = webview_value_new_string(const_cast<char*>(origin.c_str()));
+                    WValue* wPerms = webview_value_new_int(int64_t(permissions));
+                    WValue* retMap = webview_value_new_map();
+                    webview_value_set_string(retMap, "browserId", bId);
+                    webview_value_set_string(retMap, "requestId", rId);
+                    webview_value_set_string(retMap, "isMedia", wMedia);
+                    webview_value_set_string(retMap, "origin", wOrigin);
+                    webview_value_set_string(retMap, "permissions", wPerms);
+                    m_invokeFunc("onPermissionRequest", retMap);
+                    webview_value_unref(bId);
+                    webview_value_unref(rId);
+                    webview_value_unref(wMedia);
+                    webview_value_unref(wOrigin);
+                    webview_value_unref(wPerms);
+                    webview_value_unref(retMap);
+                }
+            };
+
+            m_handler->onPermissionDismissedEvent = [=, this](int nBrowserId, uint64_t requestId, bool isMedia)
+            {
+                if (m_invokeFunc)
+                {
+                    WValue* bId = webview_value_new_int(nBrowserId);
+                    WValue* rId = webview_value_new_int(int64_t(requestId));
+                    WValue* wMedia = webview_value_new_bool(isMedia);
+                    WValue* retMap = webview_value_new_map();
+                    webview_value_set_string(retMap, "browserId", bId);
+                    webview_value_set_string(retMap, "requestId", rId);
+                    webview_value_set_string(retMap, "isMedia", wMedia);
+                    m_invokeFunc("onPermissionDismissed", retMap);
+                    webview_value_unref(bId);
+                    webview_value_unref(rId);
+                    webview_value_unref(wMedia);
+                    webview_value_unref(retMap);
+                }
+            };
+
             m_handler->onDownloadUpdatedEvent = [=, this](int nBrowserId, uint32_t downloadId, std::string url, std::string fullPath, int64_t receivedBytes, int64_t totalBytes, int64_t currentSpeed, int percentComplete, bool isInProgress, bool isComplete, bool isCanceled, bool isInterrupted, int interruptReason)
             {
                 if (m_invokeFunc)
@@ -438,6 +482,8 @@ namespace webview_cef {
 		m_handler->onLoadErrorEvent = nullptr;
 		m_handler->onBeforeDownloadEvent = nullptr;
 		m_handler->onDownloadUpdatedEvent = nullptr;
+		m_handler->onPermissionRequestEvent = nullptr;
+		m_handler->onPermissionDismissedEvent = nullptr;
 		m_init = false;
 	}
 
@@ -777,6 +823,36 @@ namespace webview_cef {
 			const auto downloadPath = webview_value_get_string(webview_value_get_list_value(values, 1));
 			bool showDialog = webview_value_get_bool(webview_value_get_list_value(values, 2));
 			m_handler->continueDownload(downloadId, downloadPath ? downloadPath : "", showDialog);
+			result(1, nullptr);
+		}
+		else if (name.compare("respondMediaAccess") == 0) {
+			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			uint32_t allowed = uint32_t(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->respondMediaAccess(requestId, allowed);
+			result(1, nullptr);
+		}
+		else if (name.compare("setPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			int settingValue = int(webview_value_get_int(webview_value_get_list_value(values, 2)));
+			bool ok = m_handler->setPermissionSetting(origin ? origin : "", kind ? kind : "", settingValue);
+			WValue *ret = webview_value_new_bool(ok);
+			result(1, ret);
+			webview_value_unref(ret);
+		}
+		else if (name.compare("getPermissionSetting") == 0) {
+			const auto origin = webview_value_get_string(webview_value_get_list_value(values, 0));
+			const auto kind = webview_value_get_string(webview_value_get_list_value(values, 1));
+			m_handler->getPermissionSetting(origin ? origin : "", kind ? kind : "", [=](int settingValue) {
+				WValue *ret = webview_value_new_int(settingValue);
+				result(1, ret);
+				webview_value_unref(ret);
+			});
+		}
+		else if (name.compare("respondPermissionPrompt") == 0) {
+			uint64_t requestId = uint64_t(webview_value_get_int(webview_value_get_list_value(values, 0)));
+			int permissionResult = int(webview_value_get_int(webview_value_get_list_value(values, 1)));
+			m_handler->respondPermissionPrompt(requestId, permissionResult);
 			result(1, nullptr);
 		}
 		else if (name.compare("cancelDownload") == 0) {

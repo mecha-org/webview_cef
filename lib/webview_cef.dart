@@ -4,4 +4,5 @@ export 'src/webview_events_listener.dart';
 export 'src/webview_javascript.dart';
 export 'src/webview_textinput.dart';
 export 'src/webview_inject_user_script.dart';
+export 'src/webview_permission.dart';
 export 'src/webview_touch_selection.dart';
